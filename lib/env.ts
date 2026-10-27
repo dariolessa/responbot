@@ -45,6 +45,12 @@ const serverSchema = z.object({
   MP_CLIENT_SECRET: optional,
   MP_WEBHOOK_SECRET: optional,
 
+  // Catálogo: MercadoLibre e Instagram (APIs oficiales, docs/CATALOGO.md)
+  ML_CLIENT_ID: optional,
+  ML_CLIENT_SECRET: optional,
+  INSTAGRAM_APP_ID: optional,
+  INSTAGRAM_APP_SECRET: optional,
+
   // Stripe (Fase 6)
   STRIPE_SECRET_KEY: optional,
   STRIPE_WEBHOOK_SECRET: optional,

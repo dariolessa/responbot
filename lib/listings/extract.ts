@@ -48,6 +48,9 @@ export type ExtractedPage = {
   itemLinks: string[]
 }
 
+/** Una publicación encontrada, venga de la web, de MercadoLibre o de Instagram. Precio en unidades. */
+export type FoundItem = ExtractedPage["items"][number]
+
 export const EXTRACT_TOOL = {
   name: "save_catalog",
   description: "Guarda las publicaciones encontradas en la página.",
@@ -100,9 +103,13 @@ export const EXTRACT_TOOL = {
 const SYSTEM =
   "Extraés el catálogo de un negocio desde su página web para que un asistente de WhatsApp pueda ofrecerlo. Usás solo lo que dice la página: nunca inventes precios, datos ni fotos. Respondés siempre con la herramienta save_catalog."
 
-export function extractionPrompt(page: PageDigest, mode: "listing" | "detail"): string {
+export type ExtractMode = "listing" | "detail" | "social"
+
+export function extractionPrompt(page: PageDigest, mode: ExtractMode): string {
   const task =
-    mode === "detail"
+    mode === "social"
+      ? "Estas son publicaciones de Instagram del negocio. Devolvé en items una por cada publicación que ofrezca algo concreto disponible (una propiedad, un producto), con los datos que diga su texto, sus fotos (image_indexes) y su link (url, el de la publicación). Ignorá las que no ofrecen nada (saludos, frases, avisos, \"vendida\", \"alquilada\")."
+      : mode === "detail"
       ? "Esta página es la ficha de UNA publicación. Devolvé esa publicación en items (una sola) con todos sus datos y sus fotos. Si no es una ficha (es un listado, un blog o una página institucional), devolvé items vacío."
       : "Esta página puede ser un listado de publicaciones o la ficha de una sola. Devolvé en items cada publicación que se vea con sus datos (título, precio, zona y foto principal si están). Si es un listado, devolvé además en item_links los links a la ficha de cada publicación."
   return [
@@ -122,7 +129,7 @@ export function extractionPrompt(page: PageDigest, mode: "listing" | "detail"): 
 export async function extractPage(
   model: StructuredModel,
   page: PageDigest,
-  mode: "listing" | "detail",
+  mode: ExtractMode,
 ): Promise<ExtractedPage> {
   const raw = await model.run({ system: SYSTEM, prompt: extractionPrompt(page, mode), tool: EXTRACT_TOOL })
   const parsed = extractionSchema.safeParse(raw)

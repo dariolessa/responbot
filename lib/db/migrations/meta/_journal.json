@@ -64,6 +64,13 @@
       "when": 1793118430978,
       "tag": "0008_catalogo",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793120315057,
+      "tag": "0009_catalogo_cuentas",
+      "breakpoints": true
     }
   ]
 }
