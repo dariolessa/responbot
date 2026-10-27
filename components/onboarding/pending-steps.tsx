@@ -74,10 +74,8 @@ export function PendingStepsCard({ completed }: { completed: readonly string[] }
       <h2 className="font-medium">Terminá de configurar tu negocio</h2>
       <p className="mt-1 text-sm text-muted-foreground">
         {required === 0
-          ? "Ya podés dar turnos. Te queda un paso opcional."
-          : required === 1
-            ? "Te falta un paso para empezar a dar turnos."
-            : `Te faltan ${required} pasos para empezar a dar turnos.`}
+          ? "Solo te queda un paso opcional."
+          : `${required === 1 ? "Te falta un paso" : `Te faltan ${required} pasos`} para que el bot atienda por WhatsApp. La agenda ya la podés usar.`}
       </p>
       <div className="mt-4">
         <StepList completed={completed} compact />
