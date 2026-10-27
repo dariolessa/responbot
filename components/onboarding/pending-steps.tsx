@@ -67,12 +67,15 @@ export function StepList({ completed, compact }: { completed: readonly string[];
 export function PendingStepsCard({ completed }: { completed: readonly string[] }) {
   const pending = pendingSteps(completed)
   if (pending.length === 0) return null
+  // Los pasos opcionales (Mercado Pago) se muestran, pero no cuentan como faltantes.
+  const required = pending.filter((s) => !s.optional).length
   return (
     <section className="mb-8 rounded-lg border p-4 sm:p-6">
       <h2 className="font-medium">Terminá de configurar tu negocio</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        {pending.length === 1 ? "Te falta un paso" : `Te faltan ${pending.length} pasos`} para que el bot
-        atienda por WhatsApp. La agenda ya la podés usar.
+        {required === 0
+          ? "Solo te queda un paso opcional."
+          : `${required === 1 ? "Te falta un paso" : `Te faltan ${required} pasos`} para que el bot atienda por WhatsApp. La agenda ya la podés usar.`}
       </p>
       <div className="mt-4">
         <StepList completed={completed} compact />
