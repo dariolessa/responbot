@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
 import { requirePermission } from "@/lib/auth/tenant"
+import { readOnlyFailure } from "@/lib/billing/access"
 import { audit, createService, setServiceResources } from "@/lib/catalog"
 import * as schema from "@/lib/db/schema"
 import { fail, invalid, ok, optionalMoneyInput, serviceInput, type ActionResult } from "@/lib/forms"
@@ -12,15 +13,23 @@ import { fail, invalid, ok, optionalMoneyInput, serviceInput, type ActionResult 
 const saveServiceInput = serviceInput.extend({
   id: z.uuid().optional(),
   depositOverride: optionalMoneyInput,
+  /** Semanas entre visitas, para la reactivación ("" = el ritmo de cada cliente). */
+  rebookWeeks: z
+    .union([z.literal(""), z.coerce.number().int().min(1, { error: "Mínimo 1 semana." }).max(52, { error: "Máximo 52 semanas." })])
+    .optional()
+    .transform((v) => (v === "" || v === undefined ? null : v * 7)),
   active: z.boolean(),
   resourceIds: z.array(z.uuid()),
 })
 
 export async function saveService(input: z.input<typeof saveServiceInput>): Promise<ActionResult> {
   const tenant = await requirePermission("manageServices")
+  const blocked = await readOnlyFailure(tenant.db)
+  if (blocked) return blocked
   const parsed = saveServiceInput.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
-  const { id, resourceIds, ...values } = parsed.data
+  const { id, resourceIds, rebookWeeks, ...rest } = parsed.data
+  const values = { ...rest, rebookIntervalDays: rebookWeeks }
 
   if (id) {
     const before = await tenant.db.services.findById(id)
@@ -61,6 +70,8 @@ async function markServicesStep(tenant: Awaited<ReturnType<typeof requirePermiss
 /** Sube o baja un servicio en el catálogo (el orden en que lo ofrece el bot). */
 export async function moveService(input: { id: string; direction: "up" | "down" }): Promise<ActionResult> {
   const tenant = await requirePermission("manageServices")
+  const blocked = await readOnlyFailure(tenant.db)
+  if (blocked) return blocked
   const { id, direction } = z
     .object({ id: z.uuid(), direction: z.enum(["up", "down"]) })
     .parse(input)
@@ -88,6 +99,8 @@ export async function moveService(input: { id: string; direction: "up" | "down" 
 /** Borra un servicio sin turnos; si tiene turnos, lo pausa para no perder el historial. */
 export async function deleteService(input: { id: string }): Promise<ActionResult<"deleted" | "paused">> {
   const tenant = await requirePermission("manageServices")
+  const blocked = await readOnlyFailure(tenant.db)
+  if (blocked) return blocked
   const { id } = z.object({ id: z.uuid() }).parse(input)
   const service = await tenant.db.services.findById(id)
   if (!service) return fail("Ese servicio ya no existe.")

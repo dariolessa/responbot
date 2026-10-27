@@ -107,6 +107,7 @@ async function recipientsFor(
   return members.filter((m) => {
     if (input.excludeUserId && m.userId === input.excludeUserId) return false
     if (input.userIds && !input.userIds.includes(m.userId)) return false
+    if (def.ownerOnly) return m.role === "owner"
     if (m.role === "owner" || m.role === "admin") return true
     return m.userId === staffUserId
   })
@@ -219,6 +220,8 @@ const emailButtonLabels: Partial<Record<NotificationType, string>> = {
   "mercadopago.disconnected": "Reconectar Mercado Pago",
   "summary.daily": "Ver la agenda",
   "summary.weekly": "Ver estadísticas",
+  "billing.payment_failed": "Actualizar la tarjeta",
+  "billing.usage": "Ver planes",
 }
 
 function emailLines(type: NotificationType, payload: NotificationPayloads[NotificationType]): string[] {

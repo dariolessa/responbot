@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
 import { getTenant, requirePermission } from "@/lib/auth/tenant"
+import { readOnlyFailure } from "@/lib/billing/access"
 import { agendaAccess, canSeeCustomer } from "@/lib/booking/access"
 import * as schema from "@/lib/db/schema"
 import { fail, invalid, ok, type ActionResult } from "@/lib/forms"
@@ -28,6 +29,8 @@ const customerInput = z.object({
 /** Alta manual de un cliente (dueño y admin; un profesional los suma al darles un turno). */
 export async function createCustomer(input: z.input<typeof customerInput>): Promise<ActionResult<{ id: string }>> {
   const tenant = await requirePermission("viewAllAgenda")
+  const blocked = await readOnlyFailure(tenant.db)
+  if (blocked) return blocked
   const parsed = customerInput.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
   const phone = normalizePhone(parsed.data.phone, tenant.business.timezone)
@@ -52,6 +55,8 @@ const updateInput = customerInput.extend({ id: z.uuid() })
 
 export async function updateCustomer(input: z.input<typeof updateInput>): Promise<ActionResult> {
   const tenant = await getTenant()
+  const blocked = await readOnlyFailure(tenant.db)
+  if (blocked) return blocked
   const access = await agendaAccess(tenant)
   const parsed = updateInput.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)

@@ -1,5 +1,6 @@
 import { and, asc, eq, gt, inArray, isNull, lt, ne, or } from "drizzle-orm"
 
+import { billingState, hasFeature } from "@/lib/billing/state"
 import * as schema from "@/lib/db/schema"
 import type { ScopedDb } from "@/lib/db/scoped"
 import { depositFor } from "@/lib/payments/deposits"
@@ -112,6 +113,7 @@ export type CreateBookingInput = {
 export async function depositForBooking(
   tx: ScopedDb,
   input: { price: number; depositOverride: number | null; customer: schema.Customer },
+  now: Date = new Date(),
 ): Promise<{ amount: number; holdMinutes: number }> {
   const [rules, account] = await Promise.all([
     tx.bookingRules.findFirst(),
@@ -119,6 +121,9 @@ export async function depositForBooking(
   ])
   const holdMinutes = rules?.holdMinutes ?? 15
   if (!account || input.customer.isTest) return { amount: 0, holdMinutes }
+  // Las señas vienen con el plan Pro o superior.
+  const business = await tx.business()
+  if (!business || !hasFeature(billingState(business, now), "deposits")) return { amount: 0, holdMinutes }
   const amount = depositFor({
     rules,
     price: input.price,
@@ -151,7 +156,7 @@ export async function createBooking(
 
       const now = options.now ?? new Date()
       const deposit = input.requestDeposit
-        ? await depositForBooking(tx, { price: terms.price, depositOverride: terms.service.depositOverride, customer })
+        ? await depositForBooking(tx, { price: terms.price, depositOverride: terms.service.depositOverride, customer }, now)
         : { amount: 0, holdMinutes: 0 }
       const held = deposit.amount > 0
       const status = held ? ("pending_payment" as const) : ("confirmed" as const)

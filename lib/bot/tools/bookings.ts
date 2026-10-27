@@ -7,6 +7,7 @@ import {
   createBooking,
   moveBooking,
 } from "@/lib/booking/create"
+import { billingState, hasFeature } from "@/lib/billing/state"
 import { openStatuses } from "@/lib/booking/policies"
 import { findSlots, type Slot } from "@/lib/booking/slots"
 import * as schema from "@/lib/db/schema"
@@ -393,6 +394,9 @@ export const joinWaitlist = defineTool({
     to_time: timeField.optional(),
   }),
   async run(input, ctx) {
+    if (!hasFeature(billingState(ctx.business, ctx.now), "waitlist")) {
+      throw new ToolError("Este negocio no tiene lista de espera. Ofrecé otros días u horarios libres.")
+    }
     const service = await requireService(ctx, input.service_id)
     if (input.date < today(ctx)) throw new ToolError("Esa fecha ya pasó.")
     const existing = await ctx.scoped.waitlistEntries.findFirst(

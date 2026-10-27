@@ -1,5 +1,6 @@
 import { and, asc, eq, inArray, lt, ne } from "drizzle-orm"
 
+import { billingState, hasFeature } from "@/lib/billing/state"
 import * as schema from "@/lib/db/schema"
 import type { ScopedDb } from "@/lib/db/scoped"
 import { formatZoned, timeToMinutes, toDateString, toTimeString } from "@/lib/time"
@@ -36,6 +37,9 @@ export async function offerFreedSlot(scoped: ScopedDb, freed: FreedSlot, now: Da
   if (freed.startsAt <= now) return 0
   const business = await scoped.business()
   if (!business) return 0
+  // Sin lista de espera en el plan (o sin poder reservar), los anotados no reciben ofertas.
+  const billing = billingState(business, now)
+  if (!billing.canBook || !hasFeature(billing, "waitlist")) return 0
   const tz = business.timezone
   const date = toDateString(freed.startsAt, tz)
 

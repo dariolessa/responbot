@@ -15,6 +15,7 @@ export type ServiceValues = {
   durationMinutes: number
   price: number
   depositOverride?: number | null
+  rebookIntervalDays?: number | null
   active?: boolean
 }
 

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
 import { requirePermission } from "@/lib/auth/tenant"
+import { readOnlyFailure } from "@/lib/billing/access"
 import { handleIncomingMessage } from "@/lib/bot/engine"
 import {
   getTestConversation,
@@ -57,7 +58,46 @@ export type BotSettingsInput = z.input<typeof settingsInput>
 
 export async function saveBotSettings(input: BotSettingsInput): Promise<ActionResult> {
   const tenant = await requirePermission("manageBot")
+  const blocked = await readOnlyFailure(tenant.db)
+  if (blocked) return blocked
   const parsed = settingsInput.safeParse(input)
+  if (!parsed.success) return invalid(parsed.error)
+
+  const existing = await tenant.db.botSettings.findFirst()
+  if (existing) {
+    await tenant.db.botSettings.update(eq(schema.botSettings.id, existing.id), parsed.data)
+  } else {
+    await tenant.db.botSettings.insert(parsed.data)
+  }
+  revalidatePath("/app/bot")
+  return ok()
+}
+
+const automationsInput = z
+  .object({
+    reactivationEnabled: z.boolean(),
+    reviewRequestEnabled: z.boolean(),
+    reviewUrl: z
+      .string()
+      .trim()
+      .max(500, { error: "El enlace es muy largo." })
+      .transform((v) => v || null)
+      .pipe(z.url({ protocol: /^https$/, error: "Pegá el enlace completo, que empiece con https://." }).nullable()),
+    reviewDelayHours: z
+      .number()
+      .int()
+      .refine((v) => [1, 2, 4, 24].includes(v), { error: "Elegí cuándo mandarlo." }),
+  })
+  .refine((v) => !v.reviewRequestEnabled || v.reviewUrl, {
+    error: "Pegá el enlace para dejar la reseña.",
+    path: ["reviewUrl"],
+  })
+
+export async function saveAutomations(input: z.input<typeof automationsInput>): Promise<ActionResult> {
+  const tenant = await requirePermission("manageBot")
+  const blocked = await readOnlyFailure(tenant.db)
+  if (blocked) return blocked
+  const parsed = automationsInput.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
   const existing = await tenant.db.botSettings.findFirst()

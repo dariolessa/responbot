@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, or } from "drizzle-orm"
 
 import { openStatuses } from "@/lib/booking/policies"
+import { billingState } from "@/lib/billing/state"
 import * as schema from "@/lib/db/schema"
 import type { ScopedDb } from "@/lib/db/scoped"
 import type { Anthropic, BotModel } from "@/lib/integrations/anthropic/types"
@@ -274,7 +275,8 @@ async function runTurn(
   const firstMessage = !recent.some((m) => m.direction === "outbound")
   const answeredUpTo = recent.find((m) => m.direction === "inbound")?.createdAt ?? now
 
-  const canBook = !(business.plan === "trial" && business.trialEndsAt && business.trialEndsAt < now)
+  // Prueba vencida, suscripción terminada o pago fallido sin gracia: responde consultas pero no reserva.
+  const canBook = billingState(business, now).canBook
   const serviceName = new Map(catalog.services.map((s) => [s.id, s.name]))
   const staffName = new Map(catalog.staff.map((s) => [s.id, s.name]))
   const system = systemBlocks(
