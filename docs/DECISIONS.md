@@ -33,3 +33,25 @@ Decisiones que el SPEC no define, tomadas con el criterio "la opción más simpl
 | Crons | Las cuatro rutas validan `Authorization: Bearer CRON_SECRET` (comparación en tiempo constante) y responden 200; `maxDuration` 60 s. | Lo que pide la Fase 0. |
 | Nombre y logo | El producto se llama **Responbot** (logo que mandó Dario y nombre del repo). El nombre vive en `lib/brand.ts`; el SPEC sigue diciendo "Agendabot" como nombre provisorio. El isotipo (globo de chat con el robot) está redibujado en SVG (`public/brand/responbot-mark.svg`, `components/layout/logo.tsx`, `app/icon.svg`) porque el PNG original trae un fondo negro con brillo; el original queda en `public/brand/`. | Un SVG se ve nítido en el favicon y en claro y oscuro. Si hay un SVG oficial, se reemplaza ese archivo. |
 | Verde de marca vs. acento | El verde del logo (#02A82F) se usa solo en la marca; el acento de la interfaz sigue siendo esmeralda, como pide el SPEC. | Son tonos cercanos y el esmeralda de Tailwind ya tiene sus variantes para claro y oscuro con contraste AA. |
+
+## Fase 1
+
+| Tema | Decisión | Motivo |
+| --- | --- | --- |
+| Rubro del negocio | Se guarda en `businesses.category` (peluquería, barbería, uñas, estética u otro). | Sirve para elegir plantillas y, más adelante, el tono del bot. |
+| Pasos del onboarding | `businesses.onboarding_completed` (lista de pasos hechos). Los pasos de WhatsApp, Mercado Pago y "probar el bot" se muestran como "Muy pronto" y no bloquean. La agenda muestra una tarjeta con lo que falta. | Se puede retomar en cualquier momento sin tablas nuevas. |
+| Plantillas de servicios | Precios de referencia en pesos uruguayos; con otra moneda se precargan nombre y duración y el precio queda vacío. | Uruguay primero; un precio convertido sería inventado. |
+| Invitación con profesional | `invitations.resource_id`: al aceptar, la columna de la agenda queda vinculada a esa cuenta. | Así un profesional invitado ve su propia columna desde el primer ingreso. |
+| Turnos desde el panel | Ignoran anticipación mínima y días máximos, pero no se pueden superponer ni caer en un bloqueo. Fuera del horario laboral se permiten (se muestran todos los horarios libres del día). | El dueño necesita excepciones; superponer turnos nunca es correcto. |
+| Buffer | Se suma al final de cada turno al calcular disponibilidad; los bloqueos no llevan buffer. | Es el tiempo de limpieza después de atender. |
+| Estado inicial de turnos manuales | `confirmed`, sin seña. La seña llega con Mercado Pago en la Fase 5. | No hay cobros en esta fase. |
+| Transiciones | `pending_payment` también puede pasar a `cancelled`. | Que el dueño pueda anular un turno sin esperar al vencimiento. |
+| Cancelados | Solo aparecen en la vista Lista; en Día y Semana liberan el lugar. | Que la grilla muestre lo que ocupa tiempo. |
+| Arrastrar turnos | Con mouse en la vista Día. En celular se reprograma desde el detalle del turno. | Arrastrar con el dedo choca con el scroll. |
+| "Cualquiera disponible" | Toma el primer profesional libre, por orden alfabético. | Simple y predecible; el reparto equitativo puede venir después. |
+| Formularios | `useState` + server actions + Zod en el servidor, sin react-hook-form. | Formularios chicos; una dependencia menos. |
+| Clientes que ve un profesional | Los que tienen al menos un turno en su columna. | Lectura directa de "ve solo su agenda y sus clientes". |
+| Rol de dueño | No se cambia desde el panel (ni se quita ni se asigna). | Transferir la propiedad es un flujo aparte, con facturación de por medio. |
+| Logo del negocio | Queda para más adelante. | Necesita Vercel Blob, que todavía no está configurado. |
+| PWA | Manifest, íconos y un service worker que solo muestra una página sin conexión; no guarda datos en caché. Se registra solo en producción. | Instalable sin el riesgo de mostrar una agenda vieja. |
+| Fechas | `date-fns` y `date-fns-tz`; los horarios laborales son hora local del negocio y se convierten a UTC al calcular. | Lo que pide el SPEC. |

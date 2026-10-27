@@ -186,10 +186,17 @@ export const businesses = pgTable("businesses", {
   timezone: text("timezone").notNull().default("America/Montevideo"),
   currency: text("currency").notNull().default("UYU"),
   address: text("address"),
+  /** Tipo de negocio dentro del rubro (peluquería, barbería…); elige las plantillas de servicios. */
+  category: text("category"),
   logoUrl: text("logo_url"),
   plan: planEnum("plan").notNull().default("trial"),
   trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
   stripeCustomerId: text("stripe_customer_id").unique(),
+  /** Pasos del asistente de alta ya completados (ver lib/onboarding/steps.ts). */
+  onboardingCompleted: text("onboarding_completed")
+    .array()
+    .notNull()
+    .default(sql`'{}'::text[]`),
   ...timestamps,
 })
 
@@ -217,6 +224,10 @@ export const invitations = pgTable(
     role: roleEnum("role").notNull(),
     tokenHash: text("token_hash").notNull().unique(),
     invitedBy: uuid("invited_by").references(() => users.id, { onDelete: "set null" }),
+    /** Profesional de la agenda que pasa a ser esta persona al aceptar. */
+    resourceId: uuid("resource_id").references((): AnyPgColumn => resources.id, {
+      onDelete: "set null",
+    }),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     acceptedAt: timestamp("accepted_at", { withTimezone: true }),
     ...timestamps,
@@ -663,3 +674,12 @@ export const auditLogs = pgTable(
 export type Role = (typeof roleEnum.enumValues)[number]
 export type Business = typeof businesses.$inferSelect
 export type Membership = typeof memberships.$inferSelect
+export type Service = typeof services.$inferSelect
+export type Resource = typeof resources.$inferSelect
+export type WorkingHours = typeof workingHours.$inferSelect
+export type TimeOff = typeof timeOff.$inferSelect
+export type Customer = typeof customers.$inferSelect
+export type Booking = typeof bookings.$inferSelect
+export type BookingEvent = typeof bookingEvents.$inferSelect
+export type BookingRules = typeof bookingRules.$inferSelect
+export type Invitation = typeof invitations.$inferSelect

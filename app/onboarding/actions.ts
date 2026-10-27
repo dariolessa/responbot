@@ -7,6 +7,7 @@ import { getMemberships, requireUser } from "@/lib/auth/tenant"
 import { currencyOptions, timezoneOptions, TRIAL_DAYS } from "@/lib/business-options"
 import { db } from "@/lib/db"
 import { forUser } from "@/lib/db/scoped"
+import { nextStepHref } from "@/lib/onboarding/steps"
 import { businessSlug } from "@/lib/slug"
 
 const values = <T extends readonly { value: string }[]>(options: T) =>
@@ -22,6 +23,11 @@ const createBusinessSchema = z.object({
   archetype: z.literal("services", { error: "Elegí un rubro disponible." }),
   timezone: z.enum(values(timezoneOptions), { error: "Elegí una zona horaria." }),
   currency: z.enum(values(currencyOptions), { error: "Elegí una moneda." }),
+  address: z
+    .string()
+    .trim()
+    .max(160, { error: "La dirección es muy larga." })
+    .transform((v) => v || null),
 })
 
 export type CreateBusinessState = {
@@ -35,7 +41,7 @@ export async function createBusiness(
 ): Promise<CreateBusinessState> {
   const user = await requireUser()
   const raw = Object.fromEntries(
-    ["name", "archetype", "timezone", "currency"].map((k) => [k, String(formData.get(k) ?? "")]),
+    ["name", "archetype", "timezone", "currency", "address"].map((k) => [k, String(formData.get(k) ?? "")]),
   )
   const parsed = createBusinessSchema.safeParse(raw)
   if (!parsed.success) {
@@ -54,7 +60,9 @@ export async function createBusiness(
       ...parsed.data,
       slug: businessSlug(parsed.data.name),
       trialEndsAt: new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000),
+      onboardingCompleted: ["business"],
     })
+    redirect(nextStepHref("business"))
   }
   redirect("/app/agenda")
 }

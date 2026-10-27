@@ -6,7 +6,7 @@
 
 ## Producto
 
-SaaS multi-negocio "Responbot" (en el SPEC figura como "Agendabot", nombre provisorio; la marca vive en `lib/brand.ts`): un asistente de WhatsApp que responde consultas, cotiza servicios con precio fijo y reserva turnos, más un panel web con agenda para el dueño y su equipo. El MVP apunta a servicios con turno (peluquerías, barberías, uñas, estética), Uruguay primero. Estado actual: Fase 0 (base) terminada; sigue la Fase 1 (agenda sin bot).
+SaaS multi-negocio "Responbot" (en el SPEC figura como "Agendabot", nombre provisorio; la marca vive en `lib/brand.ts`): un asistente de WhatsApp que responde consultas, cotiza servicios con precio fijo y reserva turnos, más un panel web con agenda para el dueño y su equipo. El MVP apunta a servicios con turno (peluquerías, barberías, uñas, estética), Uruguay primero. Estado actual: Fases 0 (base) y 1 (agenda sin bot) terminadas; sigue la Fase 2 (bot en chat de prueba).
 
 ## Stack
 
@@ -45,8 +45,12 @@ SaaS multi-negocio "Responbot" (en el SPEC figura como "Agendabot", nombre provi
 
 ## Mapa rápido
 
-- `app/(auth)/login`, `app/onboarding`, `app/app/*` (panel), `app/api/*` (auth, crons).
+- `app/(auth)/login`, `app/onboarding/*` (asistente por pasos), `app/app/*` (panel: agenda, clientes, servicios, equipo, configuración), `app/api/*` (auth, crons).
 - `proxy.ts`: chequeo optimista de sesión para `/app` y `/onboarding`.
 - `lib/auth/`: Auth.js (`index.ts`), roles, `tenant.ts` (sesión → negocio activo → scope).
 - `lib/db/`: `schema.ts`, `scoped.ts`, `migrations/`.
+- `lib/booking/`: disponibilidad (`availability.ts`, pura), alta/mover/estados de turnos (`create.ts`), qué ve cada rol (`access.ts`).
+- `lib/catalog.ts` (servicios, profesionales, horarios), `lib/onboarding/` (plantillas y pasos), `lib/forms.ts` (esquemas Zod y `ActionResult`), `lib/time.ts`, `lib/money.ts`, `lib/phone.ts`.
+- `components/agenda/` (vistas Día, Semana y Lista, hojas de turno y bloqueo), `components/forms/`.
+- PWA: `app/manifest.ts`, `public/sw.js` (solo página sin conexión), `public/icons/`.
 - `tests/unit/`: tests; `tests/helpers/db.ts` levanta Postgres en memoria con las migraciones reales.

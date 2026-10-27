@@ -119,3 +119,14 @@
     stroke-width: 1.75;
   }
 }
+
+/* Bloqueos de la agenda: rayado suave que se lee en claro y oscuro. */
+.agenda-blocked {
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0,
+    transparent 6px,
+    color-mix(in oklab, var(--muted-foreground) 18%, transparent) 6px,
+    color-mix(in oklab, var(--muted-foreground) 18%, transparent) 7px
+  );
+}
