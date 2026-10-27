@@ -9,6 +9,8 @@ import { BillingBanner } from "@/components/billing/billing-banner"
 import { getTenant } from "@/lib/auth/tenant"
 import { monthUsage } from "@/lib/billing/access"
 import { billingState } from "@/lib/billing/state"
+import { env } from "@/lib/env"
+import { isPlatformAdmin } from "@/lib/pilots/admins"
 import { unreadCount } from "@/lib/notifications/inbox"
 
 /*
@@ -22,6 +24,7 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
   const now = new Date()
   const billing = billingState((await db.business())!, now)
   const usage = await monthUsage(db, billing, business.timezone, now)
+  const platformAdmin = isPlatformAdmin(user.email, env.PLATFORM_ADMIN_EMAILS)
 
   const toSwitcher = (m: typeof business): SwitcherBusiness => ({
     businessId: m.businessId,
@@ -46,7 +49,7 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
           <SidebarNav role={role} badges={badges} />
         </div>
         <div className="flex items-center justify-between border-t px-3 py-3">
-          <UserMenu name={user.name} email={user.email} image={user.image} />
+          <UserMenu name={user.name} email={user.email} image={user.image} platformAdmin={platformAdmin} />
           <ThemeToggle />
         </div>
       </aside>
@@ -58,7 +61,7 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
         </Link>
         <div className="flex items-center">
           <ThemeToggle />
-          <UserMenu name={user.name} email={user.email} image={user.image} />
+          <UserMenu name={user.name} email={user.email} image={user.image} platformAdmin={platformAdmin} />
         </div>
       </header>
 

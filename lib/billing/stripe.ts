@@ -68,15 +68,18 @@ export async function startCheckout(
   const business = await scoped.business()
   if (!business) throw new Error("billing: no existe el negocio")
   const customerId = await ensureCustomer(scoped, input.ownerEmail, deps)
-  const keepTrial =
-    business.plan === "trial" && business.trialEndsAt && business.trialEndsAt.getTime() - now.getTime() > MIN_TRIAL_END_MS
+  // Lo que quede de prueba o de piloto (lo que termine más tarde) no se cobra.
+  const freeUntil = [business.plan === "trial" ? business.trialEndsAt : null, business.pilotEndsAt]
+    .filter((d): d is Date => d != null)
+    .sort((a, b) => b.getTime() - a.getTime())[0]
+  const keepTrial = freeUntil && freeUntil.getTime() - now.getTime() > MIN_TRIAL_END_MS
   const session = await deps.api.createCheckoutSession({
     customerId,
     priceId: deps.prices[input.plan],
     businessId: business.id,
     successUrl: `${deps.appUrl}/app/facturacion?estado=suscripto`,
     cancelUrl: `${deps.appUrl}/app/facturacion`,
-    trialEnd: keepTrial ? business.trialEndsAt : null,
+    trialEnd: keepTrial ? freeUntil : null,
   })
   if (!session.url) throw new Error("billing: Stripe no devolvió la URL de Checkout")
   return session.url

@@ -101,6 +101,7 @@ export const messageStatusEnum = pgEnum("message_status", [
 ])
 export const toneEnum = pgEnum("bot_tone", ["informal", "formal"])
 export const replyHoursEnum = pgEnum("reply_hours", ["always", "business_hours"])
+export const botFeedbackRatingEnum = pgEnum("bot_feedback_rating", ["good", "bad"])
 export const scheduledKindEnum = pgEnum("scheduled_kind", [
   "reminder_24h",
   "reminder_2h",
@@ -225,6 +226,10 @@ export const businesses = pgTable("businesses", {
     .array()
     .notNull()
     .default(sql`'{}'::text[]`),
+  /** Negocio piloto (Fase 7): todo habilitado, sin cobro, hasta esta fecha. Lo pone el equipo de la plataforma en /admin. */
+  pilotEndsAt: timestamp("pilot_ends_at", { withTimezone: true }),
+  /** Negocio de la demo pública: nunca vence y sus clientes, turnos y conversaciones se borran cada noche. */
+  isDemo: boolean("is_demo").notNull().default(false),
   ...timestamps,
 })
 
@@ -626,6 +631,31 @@ export const messages = pgTable(
   (t) => [index().on(t.conversationId, t.createdAt)],
 )
 
+/**
+ * Opinión del equipo sobre una respuesta del bot (Fase 7, ajustes con
+ * conversaciones reales). Una por mensaje; la última opinión reemplaza a la anterior.
+ */
+export const botFeedback = pgTable(
+  "bot_feedback",
+  {
+    id: id(),
+    businessId: businessRef(),
+    messageId: uuid("message_id")
+      .notNull()
+      .unique()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    rating: botFeedbackRatingEnum("rating").notNull(),
+    /** Qué tendría que haber contestado, en palabras del negocio. */
+    note: text("note"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [index().on(t.businessId, t.createdAt)],
+)
+
 export const botSettings = pgTable("bot_settings", {
   id: id(),
   businessId: businessRef().unique(),
@@ -791,3 +821,4 @@ export type NotificationPrefs = typeof notificationPrefs.$inferSelect
 export type Payment = typeof payments.$inferSelect
 export type MpAccount = typeof mpAccounts.$inferSelect
 export type WaitlistEntry = typeof waitlistEntries.$inferSelect
+export type BotFeedback = typeof botFeedback.$inferSelect

@@ -1,5 +1,6 @@
 import { openingHours, type Catalog } from "@/lib/bot/catalog"
 import { templateFor } from "@/lib/bot/templates"
+import { brand } from "@/lib/brand"
 import type * as schema from "@/lib/db/schema"
 import type { Anthropic } from "@/lib/integrations/anthropic/types"
 import { formatMoney } from "@/lib/money"
@@ -28,6 +29,8 @@ export function fixedBlock(input: {
   rules: schema.BookingRules | undefined
   settings: schema.BotSettings | undefined
   catalog: Catalog
+  /** Para la demo pública: la web de Responbot, que el bot comparte si le preguntan. */
+  demoUrl?: string | null
 }): string {
   const { business, rules, settings, catalog } = input
   const template = templateFor(business.archetype)
@@ -87,9 +90,21 @@ export function fixedBlock(input: {
     `# Equipo\n\n${staff}`,
     `# Políticas\n\n${policies}`,
     `# Preguntas frecuentes\n\n${faq}`,
+    business.isDemo ? demoBlock(input.demoUrl ?? null) : "",
   ]
     .filter(Boolean)
     .join("\n\n")
+}
+
+function demoBlock(url: string | null): string {
+  return [
+    "# Demo",
+    "",
+    `Este negocio es la demo pública de ${brand.name}: quien escribe está probando cómo funciona el asistente. Atendelo igual que en un negocio real (consultas, precios, reservas, cambios y cancelaciones).`,
+    "- Al confirmar un turno, aclarale en una frase que es de prueba y que se borra a la noche.",
+    `- Si pregunta qué es esto o cómo tenerlo en su negocio, explicá en una o dos frases que ${brand.name} es un asistente de WhatsApp que responde, cotiza y reserva turnos con la agenda del negocio${url ? `, y pasale ${url}` : ""}.`,
+    "- No derives a una persona salvo que lo pida: en la demo nadie del equipo responde.",
+  ].join("\n")
 }
 
 export function contextBlock(input: {

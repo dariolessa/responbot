@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, or } from "drizzle-orm"
 
+import { publicAppUrl } from "@/lib/app-url"
 import { openStatuses } from "@/lib/booking/policies"
 import { billingState } from "@/lib/billing/state"
 import * as schema from "@/lib/db/schema"
@@ -280,7 +281,7 @@ async function runTurn(
   const serviceName = new Map(catalog.services.map((s) => [s.id, s.name]))
   const staffName = new Map(catalog.staff.map((s) => [s.id, s.name]))
   const system = systemBlocks(
-    fixedBlock({ business, rules, settings, catalog }),
+    fixedBlock({ business, rules, settings, catalog, demoUrl: business.isDemo ? publicAppUrl() : null }),
     contextBlock({
       business,
       customer,

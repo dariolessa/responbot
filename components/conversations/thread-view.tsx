@@ -9,12 +9,19 @@ import {
   Clock,
   ImageIcon,
   Mic,
+  ThumbsDown,
+  ThumbsUp,
   UserRound,
 } from "lucide-react"
 import Link from "next/link"
-import { useEffect, useRef, useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react"
 
-import { releaseConversationAction, sendReplyAction, takeConversationAction } from "@/app/app/conversaciones/actions"
+import {
+  rateBotReplyAction,
+  releaseConversationAction,
+  sendReplyAction,
+  takeConversationAction,
+} from "@/app/app/conversaciones/actions"
 import { FormError } from "@/components/forms/field"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -26,17 +33,20 @@ import type { Thread, ThreadMessage } from "@/lib/whatsapp/inbox"
 /*
  * Hilo de una conversación de WhatsApp: mensajes del cliente a la izquierda y
  * del negocio (bot o equipo) a la derecha, como en el celular. Tomar la
- * conversación frena al bot; devolverla lo vuelve a activar.
+ * conversación frena al bot; devolverla lo vuelve a activar. Dueño y admins
+ * califican las respuestas del bot para ajustarlo (Fase 7).
  */
 
 export function ThreadView({
   thread,
   timezone,
   connected,
+  canRate = false,
 }: {
   thread: Thread
   timezone: string
   connected: boolean
+  canRate?: boolean
 }) {
   const [draft, setDraft] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -115,7 +125,14 @@ export function ThreadView({
         {thread.messages.length === 0 ? (
           <p className="py-10 text-center text-sm text-muted-foreground">Todavía no hay mensajes.</p>
         ) : (
-          thread.messages.map((m) => <MessageBubble key={m.id} message={m} timezone={timezone} />)
+          thread.messages.map((m) => (
+            <MessageBubble
+              key={m.id}
+              message={m}
+              timezone={timezone}
+              rating={canRate && m.author === "bot" ? <ReplyRating conversationId={thread.id} message={m} /> : null}
+            />
+          ))
         )}
       </div>
 
@@ -176,7 +193,15 @@ const statusIcons = {
 
 const statusLabels = { queued: "Enviando", sent: "Enviado", delivered: "Entregado", read: "Leído" } as const
 
-function MessageBubble({ message, timezone }: { message: ThreadMessage; timezone: string }) {
+function MessageBubble({
+  message,
+  timezone,
+  rating,
+}: {
+  message: ThreadMessage
+  timezone: string
+  rating: ReactNode
+}) {
   const fromCustomer = message.direction === "inbound"
   const StatusIcon = message.status in statusIcons ? statusIcons[message.status as keyof typeof statusIcons] : null
   const MediaIcon = message.type === "audio" ? Mic : message.type === "image" ? ImageIcon : null
@@ -229,6 +254,86 @@ function MessageBubble({ message, timezone }: { message: ThreadMessage; timezone
           {message.status === "failed" ? `No se entregó. ${message.error}` : message.error}
         </p>
       ) : null}
+      {rating}
+    </div>
+  )
+}
+
+/** Bien / Mal sobre una respuesta del bot; con "Mal" se anota qué tendría que haber dicho. */
+function ReplyRating({ conversationId, message }: { conversationId: string; message: ThreadMessage }) {
+  const current = message.rating
+  const [editing, setEditing] = useState(false)
+  const [note, setNote] = useState(current?.note ?? "")
+  const [error, setError] = useState<string | null>(null)
+  const [pending, startTransition] = useTransition()
+
+  function save(rating: "good" | "bad" | null, withNote: string | null) {
+    setError(null)
+    startTransition(async () => {
+      const result = await rateBotReplyAction({ conversationId, messageId: message.id, rating, note: withNote })
+      if (result.ok) setEditing(false)
+      else setError(result.error ?? "No se pudo guardar.")
+    })
+  }
+
+  const button = "inline-flex min-h-11 items-center gap-1 rounded-md px-2 text-xs sm:min-h-7"
+  return (
+    <div className="flex max-w-[85%] flex-col items-end gap-1">
+      <div className="flex items-center gap-1 text-muted-foreground">
+        <button
+          type="button"
+          disabled={pending}
+          aria-pressed={current?.value === "good"}
+          onClick={() => save(current?.value === "good" ? null : "good", null)}
+          className={cn(button, "hover:bg-muted", current?.value === "good" && "text-primary")}
+        >
+          <ThumbsUp className="size-3.5" />
+          Bien
+        </button>
+        <button
+          type="button"
+          disabled={pending}
+          aria-pressed={current?.value === "bad"}
+          onClick={() => (current?.value === "bad" && !editing ? save(null, null) : setEditing(true))}
+          className={cn(button, "hover:bg-muted", current?.value === "bad" && "text-destructive")}
+        >
+          <ThumbsDown className="size-3.5" />
+          Mal
+        </button>
+      </div>
+      {current?.value === "bad" && current.note && !editing ? (
+        <button type="button" onClick={() => setEditing(true)} className="text-right text-xs text-muted-foreground italic">
+          “{current.note}”
+        </button>
+      ) : null}
+      {editing ? (
+        <form
+          className="grid w-72 max-w-full gap-2"
+          onSubmit={(e) => {
+            e.preventDefault()
+            save("bad", note)
+          }}
+        >
+          <Textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="¿Qué tendría que haber contestado? (opcional)"
+            aria-label="Qué tendría que haber contestado"
+            rows={2}
+            maxLength={1000}
+            className="text-sm"
+          />
+          <div className="flex justify-end gap-2">
+            <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" size="sm" disabled={pending}>
+              Guardar
+            </Button>
+          </div>
+        </form>
+      ) : null}
+      <FormError message={error} />
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import type * as schema from "@/lib/db/schema"
 
-import { GRACE_DAYS, planDefinition, type Feature, type PlanDefinition } from "./plans"
+import { GRACE_DAYS, pilotPlan, planDefinition, type Feature, type PlanDefinition } from "./plans"
 
 /*
  * En qué situación está la cuenta del negocio con el SaaS (docs/SPEC.md,
@@ -12,9 +12,11 @@ import { GRACE_DAYS, planDefinition, type Feature, type PlanDefinition } from ".
  *   el bot sigue respondiendo consultas pero no reserva y el panel queda en
  *   solo lectura (salvo Facturación, Conversaciones y Notificaciones).
  * - Pago fallido dentro de los 7 días de gracia: funciona igual, con aviso.
+ * - Piloto (Fase 7) o demo pública: todo habilitado, con los límites del
+ *   plan Equipo, sin cobro. Una suscripción paga activa manda sobre el piloto.
  */
 
-export type BillingStatus = "trialing" | "trial_expired" | "active" | "past_due" | "suspended" | "canceled"
+export type BillingStatus = "trialing" | "trial_expired" | "active" | "past_due" | "suspended" | "canceled" | "pilot"
 
 export type BillingState = {
   status: BillingStatus
@@ -28,12 +30,15 @@ export type BillingState = {
   trialDaysLeft: number | null
   /** Hasta cuándo dura la gracia de un pago fallido. */
   graceEndsAt: Date | null
+  /** Hasta cuándo es piloto; null si no lo es (o si es la demo, que no vence). */
+  pilotEndsAt: Date | null
 }
 
 export type BillingFields = Pick<
   schema.Business,
   "plan" | "trialEndsAt" | "subscriptionStatus" | "paymentFailedAt"
->
+> &
+  Partial<Pick<schema.Business, "pilotEndsAt" | "isDemo">>
 
 const DAY_MS = 86_400_000
 
@@ -42,6 +47,21 @@ const paidStatuses = new Set(["active", "trialing"])
 const failingStatuses = new Set(["past_due", "unpaid"])
 
 export function billingState(business: BillingFields, now: Date): BillingState {
+  const state = accountState(business, now)
+  const pilot = business.isDemo || (business.pilotEndsAt != null && business.pilotEndsAt > now)
+  if (!pilot || state.status === "active") return state
+  return {
+    status: "pilot",
+    plan: pilotPlan,
+    canBook: true,
+    readOnly: false,
+    trialDaysLeft: null,
+    graceEndsAt: null,
+    pilotEndsAt: business.isDemo ? null : (business.pilotEndsAt ?? null),
+  }
+}
+
+function accountState(business: BillingFields, now: Date): BillingState {
   const graceEndsAt = business.paymentFailedAt
     ? new Date(business.paymentFailedAt.getTime() + GRACE_DAYS * DAY_MS)
     : null
@@ -50,7 +70,7 @@ export function billingState(business: BillingFields, now: Date): BillingState {
     const plan = planDefinition(business.plan)
     const status = business.subscriptionStatus ?? "active"
     if (paidStatuses.has(status)) {
-      return { status: "active", plan, canBook: true, readOnly: false, trialDaysLeft: null, graceEndsAt: null }
+      return { status: "active", plan, canBook: true, readOnly: false, trialDaysLeft: null, graceEndsAt: null, pilotEndsAt: null }
     }
     if (failingStatuses.has(status)) {
       const ends = graceEndsAt ?? new Date(now.getTime() + GRACE_DAYS * DAY_MS)
@@ -62,20 +82,21 @@ export function billingState(business: BillingFields, now: Date): BillingState {
         readOnly: !inGrace,
         trialDaysLeft: null,
         graceEndsAt: ends,
+        pilotEndsAt: null,
       }
     }
     // canceled, incomplete_expired, paused…: si todavía le queda prueba, sigue en prueba.
     if (!business.trialEndsAt || business.trialEndsAt <= now) {
-      return { status: "canceled", plan, canBook: false, readOnly: true, trialDaysLeft: null, graceEndsAt: null }
+      return { status: "canceled", plan, canBook: false, readOnly: true, trialDaysLeft: null, graceEndsAt: null, pilotEndsAt: null }
     }
   }
 
   const trial = planDefinition("trial")
   if (business.trialEndsAt && business.trialEndsAt > now) {
     const daysLeft = Math.floor((business.trialEndsAt.getTime() - now.getTime()) / DAY_MS)
-    return { status: "trialing", plan: trial, canBook: true, readOnly: false, trialDaysLeft: daysLeft, graceEndsAt: null }
+    return { status: "trialing", plan: trial, canBook: true, readOnly: false, trialDaysLeft: daysLeft, graceEndsAt: null, pilotEndsAt: null }
   }
-  return { status: "trial_expired", plan: trial, canBook: false, readOnly: true, trialDaysLeft: null, graceEndsAt: null }
+  return { status: "trial_expired", plan: trial, canBook: false, readOnly: true, trialDaysLeft: null, graceEndsAt: null, pilotEndsAt: null }
 }
 
 export function hasFeature(state: BillingState, feature: Feature): boolean {

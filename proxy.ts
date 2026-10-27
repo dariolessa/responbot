@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server"
 
 /*
- * Protege /app y /onboarding (en Next.js 16 el middleware se llama proxy).
+ * Protege /app, /onboarding y /admin (en Next.js 16 el middleware se llama proxy).
  *
  * Es un chequeo optimista: si no hay cookie de sesión, manda a /login sin tocar
  * la base. La validación real (sesión vigente, membresía activa y negocio) la
@@ -22,5 +22,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/app/:path*", "/onboarding/:path*"],
+  matcher: ["/app/:path*", "/onboarding/:path*", "/admin/:path*"],
 }

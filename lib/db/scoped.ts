@@ -46,6 +46,7 @@ export const tenantTables = {
   conversations: schema.conversations,
   messages: schema.messages,
   botSettings: schema.botSettings,
+  botFeedback: schema.botFeedback,
   scheduledMessages: schema.scheduledMessages,
   notifications: schema.notifications,
   notificationPrefs: schema.notificationPrefs,
@@ -470,7 +471,8 @@ export type UserScope = ReturnType<typeof forUser>
 /**
  * Las únicas búsquedas entre negocios: un evento de Meta trae el
  * phone_number_id (o el waba_id) y hay que saber de qué negocio es antes de
- * tener un scope; el cron de tokens recorre todas las cuentas conectadas.
+ * tener un scope; el cron de tokens recorre todas las cuentas conectadas; el
+ * panel de la plataforma (/admin) lista los negocios para seguir los pilotos.
  * Devuelven la cuenta con su business_id; todo lo demás se hace con
  * `forBusiness`.
  */
@@ -566,6 +568,34 @@ export function forPlatform(db: AnyDb) {
         .where(eq(schema.businesses.stripeCustomerId, customerId))
         .limit(1)
       return row
+    },
+
+    /**
+     * Todos los negocios con su dueño, para el panel de la plataforma (/admin,
+     * pilotos y demo). Solo lo usan las pantallas que piden requirePlatformAdmin().
+     */
+    async businessesForAdmin() {
+      const rows = await db
+        .select({ business: schema.businesses, ownerEmail: schema.users.email, ownerName: schema.users.name })
+        .from(schema.businesses)
+        .leftJoin(
+          schema.memberships,
+          and(eq(schema.memberships.businessId, schema.businesses.id), eq(schema.memberships.role, "owner")),
+        )
+        .leftJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
+        .orderBy(schema.businesses.createdAt)
+      // Un negocio tiene un solo dueño; si hubiera más de una fila, queda la primera.
+      const seen = new Set<string>()
+      return rows.filter((r) => (seen.has(r.business.id) ? false : (seen.add(r.business.id), true)))
+    },
+
+    /** Negocios de la demo pública (cron demo-reset). */
+    async demoBusinessIds(): Promise<string[]> {
+      const rows = await db
+        .select({ id: schema.businesses.id })
+        .from(schema.businesses)
+        .where(eq(schema.businesses.isDemo, true))
+      return rows.map((r) => r.id)
     },
 
     /** Resend avisó un rebote o una queja: no se le mandan más correos de avisos a esa dirección. */

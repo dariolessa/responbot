@@ -183,6 +183,12 @@ describe("suscripción con Stripe", () => {
     await salon.scoped.updateBusiness({ trialEndsAt: new Date(NOW.getTime() + DAY) })
     await startCheckout(salon.scoped, { plan: "basic", ownerEmail: null }, stripe.deps, NOW)
     expect(stripe.checkouts[2]!.trialEnd).toBeNull()
+
+    // Un piloto que se suscribe empieza a pagar cuando termina el piloto (Fase 7).
+    const pilotEndsAt = new Date(NOW.getTime() + 40 * DAY)
+    await salon.scoped.updateBusiness({ pilotEndsAt })
+    await startCheckout(salon.scoped, { plan: "basic", ownerEmail: null }, stripe.deps, NOW)
+    expect(stripe.checkouts[3]!.trialEnd).toEqual(pilotEndsAt)
   })
 
   it("el webhook copia la suscripción, el pago fallido abre la gracia y el pago aprobado manda un recibo", async () => {

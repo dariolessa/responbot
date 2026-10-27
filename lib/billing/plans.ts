@@ -118,6 +118,16 @@ export const trialPlan: PlanDefinition = {
 }
 
 export const TRIAL_DAYS = 14
+
+/** Negocios piloto y demo pública: todo lo del plan Equipo, sin cobro. */
+export const pilotPlan: PlanDefinition = {
+  ...plans.team,
+  id: "trial",
+  name: "Piloto",
+  audience: "Negocio piloto, sin cargo",
+  monthlyPriceUsd: 0,
+  highlights: [],
+}
 /** Días de gracia después de un cobro fallido antes de pasar a solo lectura. */
 export const GRACE_DAYS = 7
 /** Porcentajes del límite mensual en los que se avisa al dueño. */
