@@ -48,19 +48,21 @@ export async function addSource(input: { url: string }): Promise<ActionResult<sc
     return fail("Esa dirección ya está cargada.")
   }
   const kind = sourceKindFor(url)
-  if (kind === "web" && !importDeps()) return fail("Falta configurar la clave de Anthropic para leer páginas.")
+  const deps = importDeps()
+  if (kind !== "instagram" && !deps) return fail("Falta configurar la clave de Anthropic para leer publicaciones.")
+  const blockedReason =
+    kind === "instagram"
+      ? "Para Instagram tocá \"Conectar Instagram\": su página no se puede leer desde afuera."
+      : kind === "mercadolibre" && !deps?.mercadolibre
+        ? "La lectura de MercadoLibre todavía no está habilitada."
+        : null
   const [source] = await tenant.db.catalogSources.insert({
     url,
     kind,
-    status: kind === "web" ? "pending" : "error",
-    lastError:
-      kind === "web"
-        ? null
-        : `${kind === "instagram" ? "Instagram" : "MercadoLibre"} no deja leer las publicaciones desde afuera: hay que conectar la cuenta (próximamente).`,
+    status: blockedReason ? "error" : "pending",
+    lastError: blockedReason,
   })
-  if (kind === "web") {
-    importSoon(tenant.db.businessId, source!.id)
-  }
+  if (!blockedReason) importSoon(tenant.db.businessId, source!.id)
   revalidatePath("/app/catalogo")
   return ok(kind)
 }
@@ -72,8 +74,8 @@ export async function reimportSource(input: { id: string }): Promise<ActionResul
   const { id } = z.object({ id: z.uuid() }).parse(input)
   const source = await tenant.db.catalogSources.findById(id)
   if (!source) return fail("Esa dirección ya no está cargada.")
-  if (source.kind !== "web") return fail("Esta fuente necesita conectar la cuenta (próximamente).")
-  if (!importDeps()) return fail("Falta configurar la clave de Anthropic para leer páginas.")
+  if (source.kind === "instagram" && !source.accessTokenEnc) return fail("Conectá la cuenta de Instagram para leerla.")
+  if (!importDeps()) return fail("Falta configurar la clave de Anthropic para leer publicaciones.")
   await tenant.db.catalogSources.update(eq(schema.catalogSources.id, id), { status: "pending", lastError: null })
   importSoon(tenant.db.businessId, id)
   revalidatePath("/app/catalogo")

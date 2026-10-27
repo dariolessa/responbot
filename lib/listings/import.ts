@@ -5,7 +5,9 @@ import type { ScopedDb } from "@/lib/db/scoped"
 import type { StructuredModel } from "@/lib/integrations/anthropic/types"
 import { PageFetchError, type PageFetcher } from "@/lib/integrations/web/fetch"
 
-import { extractPage, type ExtractedPage } from "./extract"
+import { extractPage, type FoundItem } from "./extract"
+import { crawlInstagram, type IgDeps } from "./instagram"
+import { crawlMercadoLibre, SourceError, type MlDeps } from "./mercadolibre"
 import { digestPage } from "./page"
 
 /*
@@ -18,8 +20,8 @@ import { digestPage } from "./page"
  * 3. Guarda: crea las nuevas, actualiza las que ya estaban (salvo las que el
  *    dueño editó a mano) y marca como no disponibles las que ya no aparecen.
  *
- * MercadoLibre e Instagram no se leen así: necesitan que el negocio conecte
- * su cuenta con la API oficial (ver docs/CATALOGO.md).
+ * MercadoLibre e Instagram no se leen como web: van por sus APIs oficiales
+ * (lib/listings/mercadolibre.ts e instagram.ts, ver docs/CATALOGO.md).
  */
 
 export const MAX_DETAIL_PAGES = 30
@@ -30,6 +32,10 @@ const STALE_RUN_MS = 15 * 60_000
 export type ImportDeps = {
   fetchPage: PageFetcher
   model: StructuredModel
+  /** null si la plataforma no configuró la app de MercadoLibre. */
+  mercadolibre?: MlDeps | null
+  /** null si la plataforma no configuró la app de Instagram. */
+  instagram?: Omit<IgDeps, "model"> | null
   now?: () => Date
 }
 
@@ -37,7 +43,7 @@ export type ImportResult =
   | { ok: true; found: number; created: number; updated: number; hidden: number }
   | { ok: false; error: string }
 
-type Found = ExtractedPage["items"][number]
+type Found = FoundItem
 
 /** Qué tipo de fuente es una URL; las redes y marketplaces no se pueden leer como web. */
 export function sourceKindFor(url: string): schema.CatalogSource["kind"] {
@@ -149,25 +155,33 @@ export async function importSource(scoped: ScopedDb, sourceId: string, deps: Imp
     return { ok: false, error }
   }
 
-  if (source.kind !== "web") {
-    return fail(
-      source.kind === "instagram"
-        ? "Instagram no deja leer las publicaciones desde afuera: hay que conectar la cuenta (próximamente)."
-        : "MercadoLibre no deja leer las publicaciones desde afuera: hay que conectar la cuenta (próximamente).",
-    )
-  }
-
   await scoped.catalogSources.update(eq(schema.catalogSources.id, source.id), { status: "running", lastError: null })
 
   let found: Found[]
   try {
-    found = await crawlWebSource(source.url, deps)
+    if (source.kind === "mercadolibre") {
+      if (!deps.mercadolibre) return fail("La lectura de MercadoLibre todavía no está habilitada.")
+      found = await crawlMercadoLibre(scoped, source, deps.mercadolibre, now)
+    } else if (source.kind === "instagram") {
+      if (!deps.instagram) return fail("La lectura de Instagram todavía no está habilitada.")
+      found = await crawlInstagram(scoped, source, { ...deps.instagram, model: deps.model }, now)
+    } else {
+      found = await crawlWebSource(source.url, deps)
+    }
   } catch (error) {
     console.error("[catalogo] falló la importación", source.url, error)
-    return fail(error instanceof PageFetchError ? error.userMessage : "No pudimos leer la página. Probá de nuevo más tarde.")
+    return fail(
+      error instanceof PageFetchError || error instanceof SourceError
+        ? error.userMessage
+        : "No pudimos leer las publicaciones. Probá de nuevo más tarde.",
+    )
   }
   if (found.length === 0) {
-    return fail("No encontramos publicaciones en esa página. Probá con la página donde se ve el listado o con la de una publicación.")
+    return fail(
+      source.kind === "web"
+        ? "No encontramos publicaciones en esa página. Probá con la página donde se ve el listado o con la de una publicación."
+        : "No encontramos publicaciones disponibles en esa cuenta.",
+    )
   }
 
   // Una clave por publicación: su link, o el título si no tiene ficha propia.

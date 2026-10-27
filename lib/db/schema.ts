@@ -802,6 +802,14 @@ export const catalogSources = pgTable(
     /** Motivo del último error, en palabras para el dueño. */
     lastError: text("last_error"),
     itemCount: integer("item_count").notNull().default(0),
+    /** Cuenta conectada (MercadoLibre o Instagram): id del vendedor o del usuario. */
+    externalId: text("external_id"),
+    /** Nombre visible de la cuenta conectada (apodo o @usuario). */
+    accountName: text("account_name"),
+    /** Tokens de la API oficial, cifrados con ENCRYPTION_KEY. */
+    accessTokenEnc: text("access_token_enc"),
+    refreshTokenEnc: text("refresh_token_enc"),
+    tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [uniqueIndex().on(t.businessId, t.url)],

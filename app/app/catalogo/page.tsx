@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 
 import { PageHeader } from "@/components/layout/page-header"
 import { requirePermission } from "@/lib/auth/tenant"
+import { igApp, mlApp } from "@/lib/listings/deps"
 import * as schema from "@/lib/db/schema"
 import { priceLabel } from "@/lib/listings/items"
 import { centsToInput } from "@/lib/money"
@@ -13,7 +14,24 @@ export const metadata: Metadata = { title: "Catálogo" }
 // Las importaciones corren después de responder (after) y pueden leer hasta 31 páginas.
 export const maxDuration = 300
 
-export default async function CatalogoPage() {
+const notices: Record<string, Record<string, string>> = {
+  mercadolibre: {
+    conectado: "Conectamos tu cuenta de MercadoLibre. Estamos leyendo tus publicaciones.",
+    error: "No pudimos conectar MercadoLibre. Probá de nuevo.",
+    cancelado: "Cancelaste la conexión con MercadoLibre.",
+  },
+  instagram: {
+    conectado: "Conectamos tu Instagram. Estamos leyendo tus publicaciones.",
+    error: "No pudimos conectar Instagram. Revisá que sea una cuenta profesional y probá de nuevo.",
+    cancelado: "Cancelaste la conexión con Instagram.",
+  },
+}
+
+export default async function CatalogoPage({ searchParams }: PageProps<"/app/catalogo">) {
+  const params = await searchParams
+  const notice = (["mercadolibre", "instagram"] as const)
+    .map((p) => (typeof params[p] === "string" ? notices[p]![params[p]] : undefined))
+    .find(Boolean)
   const { db } = await requirePermission("manageCatalog")
   const [business, sources, items] = await Promise.all([
     db.business(),
@@ -33,6 +51,8 @@ export default async function CatalogoPage() {
       <CatalogManager
         currency={business?.currency ?? "UYU"}
         timezone={business?.timezone ?? "America/Montevideo"}
+        notice={notice ?? null}
+        connectable={{ mercadolibre: Boolean(mlApp()), instagram: Boolean(igApp()) }}
         sources={sources.map((s) => ({
           id: s.id,
           url: s.url,
@@ -40,6 +60,8 @@ export default async function CatalogoPage() {
           status: s.status,
           lastError: s.lastError,
           itemCount: s.itemCount,
+          accountName: s.accountName,
+          connected: Boolean(s.accessTokenEnc),
           lastImportedAt: s.lastImportedAt?.toISOString() ?? null,
         }))}
         items={items.map((i) => ({

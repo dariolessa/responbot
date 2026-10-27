@@ -2,9 +2,14 @@ import "server-only"
 
 import { after } from "next/server"
 
+import { publicAppUrl } from "@/lib/app-url"
+import { decrypt, encrypt } from "@/lib/crypto"
 import { db } from "@/lib/db"
 import { forBusiness, forPlatform } from "@/lib/db/scoped"
+import { env } from "@/lib/env"
 import { anthropicStructured, isAnthropicConfigured } from "@/lib/integrations/anthropic/client"
+import { instagramApi, type IgApp } from "@/lib/integrations/instagram/api"
+import { mercadoLibreApi, type MlApp } from "@/lib/integrations/mercadolibre/api"
 import { fetchPublicPage } from "@/lib/integrations/web/fetch"
 
 import { importSource, type ImportDeps } from "./import"
@@ -14,9 +19,42 @@ import { importSource, type ImportDeps } from "./import"
  * del panel (en segundo plano, con after) y el cron diario.
  */
 
+const crypto = {
+  encrypt: (value: string) => encrypt(value, env.ENCRYPTION_KEY),
+  decrypt: (value: string) => decrypt(value, env.ENCRYPTION_KEY),
+}
+
+export function mlApp(): MlApp | null {
+  return env.ML_CLIENT_ID && env.ML_CLIENT_SECRET ? { clientId: env.ML_CLIENT_ID, clientSecret: env.ML_CLIENT_SECRET } : null
+}
+
+export function igApp(): IgApp | null {
+  return env.INSTAGRAM_APP_ID && env.INSTAGRAM_APP_SECRET
+    ? { appId: env.INSTAGRAM_APP_ID, appSecret: env.INSTAGRAM_APP_SECRET }
+    : null
+}
+
+export const ML_CALLBACK_PATH = "/api/integrations/mercadolibre/callback"
+export const IG_CALLBACK_PATH = "/api/integrations/instagram/callback"
+
+export function callbackUri(path: string): string {
+  return `${publicAppUrl()}${path}`
+}
+
+export function catalogCrypto() {
+  return crypto
+}
+
 export function importDeps(): ImportDeps | null {
   if (!isAnthropicConfigured()) return null
-  return { fetchPage: fetchPublicPage, model: anthropicStructured() }
+  const ml = mlApp()
+  const ig = igApp()
+  return {
+    fetchPage: fetchPublicPage,
+    model: anthropicStructured(),
+    mercadolibre: ml ? { api: mercadoLibreApi(ml), ...crypto } : null,
+    instagram: ig ? { api: instagramApi(ig), ...crypto } : null,
+  }
 }
 
 /** Importa después de responder; el panel muestra "Importando…" y se refresca solo. */

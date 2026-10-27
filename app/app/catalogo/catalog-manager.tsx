@@ -1,6 +1,18 @@
 "use client"
 
-import { AlertTriangle, ExternalLink, Globe, ImageOff, LayoutGrid, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react"
+import {
+  AlertTriangle,
+  Camera,
+  ExternalLink,
+  Globe,
+  ImageOff,
+  LayoutGrid,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Store,
+  Trash2,
+} from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 
@@ -24,8 +36,12 @@ export type SourceRow = {
   status: "pending" | "running" | "ok" | "error"
   lastError: string | null
   itemCount: number
+  accountName: string | null
+  connected: boolean
   lastImportedAt: string | null
 }
+
+const kindIcons = { web: Globe, mercadolibre: Store, instagram: Camera } as const
 
 export type ItemRow = {
   id: string
@@ -59,16 +75,20 @@ export function CatalogManager({
   items,
   currency,
   timezone,
+  notice: initialNotice,
+  connectable,
 }: {
   sources: SourceRow[]
   items: ItemRow[]
   currency: string
   timezone: string
+  notice: string | null
+  connectable: { mercadolibre: boolean; instagram: boolean }
 }) {
   const router = useRouter()
   const [url, setUrl] = useState("")
   const [sourceError, setSourceError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(initialNotice)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
@@ -86,16 +106,17 @@ export function CatalogManager({
       if (!result.ok) return setSourceError(result.fieldErrors?.url ?? result.error)
       setUrl("")
       setNotice(
-        result.data === "web"
-          ? "Estamos leyendo la página. Tarda uno o dos minutos; las publicaciones aparecen abajo."
-          : "Quedó guardada. Para leer esas publicaciones vas a poder conectar la cuenta muy pronto.",
+        result.data === "instagram"
+          ? "Quedó guardada. Para leer tus publicaciones tocá \"Conectar Instagram\"."
+          : "Estamos leyendo las publicaciones. Tarda uno o dos minutos; aparecen abajo.",
       )
       router.refresh()
     })
   }
 
   function runSource(action: "reimport" | "delete", source: SourceRow) {
-    if (action === "delete" && !window.confirm(`¿Sacar ${shortUrl(source.url)} y sus publicaciones del catálogo?`)) return
+    const name = source.accountName ?? shortUrl(source.url)
+    if (action === "delete" && !window.confirm(`¿Sacar ${name} y sus publicaciones del catálogo?`)) return
     startTransition(async () => {
       const result = action === "reimport" ? await reimportSource({ id: source.id }) : await deleteSource({ id: source.id })
       if (!result.ok) setSourceError(result.error)
@@ -171,13 +192,13 @@ export function CatalogManager({
       <section className="mb-8 rounded-lg border p-4">
         <h2 className="font-medium">De dónde aprende</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          La página de tu web donde están las propiedades o productos (el listado o una ficha). Se vuelve a leer todos los días.
+          La página de tu web donde están las propiedades o productos, o el link de tu tienda de MercadoLibre. Se vuelve a leer todos los días.
         </p>
         <form onSubmit={add} className="mt-4 flex flex-col gap-2 sm:flex-row">
           <Input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://tuinmobiliaria.com/propiedades"
+            placeholder="https://tuinmobiliaria.com/propiedades o tu tienda de MercadoLibre"
             inputMode="url"
             aria-label="Dirección de la página"
             aria-invalid={sourceError ? true : undefined}
@@ -189,67 +210,88 @@ export function CatalogManager({
         </form>
         <FormError message={sourceError} />
         {notice ? <p className="mt-2 text-sm text-muted-foreground">{notice}</p> : null}
-        <p className="mt-2 text-xs text-muted-foreground">
-          Instagram y MercadoLibre no dejan leer sus páginas desde afuera: para esas vas a conectar la cuenta (próximamente).
-        </p>
+        {connectable.mercadolibre || connectable.instagram ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="text-sm text-muted-foreground">O conectá tu cuenta:</span>
+            {connectable.mercadolibre ? (
+              <Button variant="outline" size="sm" asChild>
+                <a href="/api/integrations/mercadolibre/connect">
+                  <Store />
+                  Conectar MercadoLibre
+                </a>
+              </Button>
+            ) : null}
+            {connectable.instagram ? (
+              <Button variant="outline" size="sm" asChild>
+                <a href="/api/integrations/instagram/connect">
+                  <Camera />
+                  Conectar Instagram
+                </a>
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
 
         {sources.length > 0 ? (
           <ul className="mt-4 divide-y rounded-md border">
-            {sources.map((s) => (
-              <li key={s.id} className="flex items-center gap-2 py-2 pr-2 pl-3">
-                <Globe className="size-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
-                  <a
-                    href={s.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block truncate text-sm font-medium hover:underline"
-                  >
-                    {shortUrl(s.url)}
-                  </a>
-                  <p className="text-xs text-muted-foreground">
-                    {s.status === "pending" || s.status === "running" ? (
-                      <span className="inline-flex items-center gap-1">
-                        <Loader2 className="size-3 animate-spin" />
-                        Leyendo la página…
-                      </span>
-                    ) : s.status === "error" ? (
-                      <span className="inline-flex items-center gap-1 text-destructive">
-                        <AlertTriangle className="size-3" />
-                        {s.lastError}
-                      </span>
-                    ) : (
-                      <>
-                        {s.itemCount === 1 ? "1 publicación" : `${s.itemCount} publicaciones`}
-                        {s.lastImportedAt
-                          ? ` · leída el ${formatZoned(new Date(s.lastImportedAt), timezone, "d MMM HH:mm")}`
-                          : null}
-                      </>
-                    )}
-                  </p>
-                </div>
-                {s.kind === "web" ? (
+            {sources.map((s) => {
+              const KindIcon = kindIcons[s.kind]
+              return (
+                <li key={s.id} className="flex items-center gap-2 py-2 pr-2 pl-3">
+                  <KindIcon className="size-4 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0 flex-1">
+                    <a
+                      href={s.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block truncate text-sm font-medium hover:underline"
+                    >
+                      {s.accountName ?? shortUrl(s.url)}
+                    </a>
+                    <p className="text-xs text-muted-foreground">
+                      {s.status === "pending" || s.status === "running" ? (
+                        <span className="inline-flex items-center gap-1">
+                          <Loader2 className="size-3 animate-spin" />
+                          Leyendo la página…
+                        </span>
+                      ) : s.status === "error" ? (
+                        <span className="inline-flex items-center gap-1 text-destructive">
+                          <AlertTriangle className="size-3" />
+                          {s.lastError}
+                        </span>
+                      ) : (
+                        <>
+                          {s.itemCount === 1 ? "1 publicación" : `${s.itemCount} publicaciones`}
+                          {s.lastImportedAt
+                            ? ` · leída el ${formatZoned(new Date(s.lastImportedAt), timezone, "d MMM HH:mm")}`
+                            : null}
+                        </>
+                      )}
+                    </p>
+                  </div>
+                  {s.kind !== "instagram" || s.connected ? (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Volver a leer"
+                      disabled={pending || s.status === "pending" || s.status === "running"}
+                      onClick={() => runSource("reimport", s)}
+                    >
+                      <RefreshCw />
+                    </Button>
+                  ) : null}
                   <Button
                     variant="ghost"
                     size="icon"
-                    aria-label="Volver a leer"
-                    disabled={pending || s.status === "pending" || s.status === "running"}
-                    onClick={() => runSource("reimport", s)}
+                    aria-label="Sacar"
+                    disabled={pending}
+                    onClick={() => runSource("delete", s)}
                   >
-                    <RefreshCw />
+                    <Trash2 />
                   </Button>
-                ) : null}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Sacar"
-                  disabled={pending}
-                  onClick={() => runSource("delete", s)}
-                >
-                  <Trash2 />
-                </Button>
-              </li>
-            ))}
+                </li>
+                )
+            })}
           </ul>
         ) : null}
       </section>
