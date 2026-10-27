@@ -46,6 +46,25 @@ export function failedStatusError(code: number | null): string {
   return "WhatsApp no lo pudo entregar."
 }
 
+/**
+ * Si WhatsApp rechaza la foto de una ficha (link caído, formato raro), se
+ * manda igual el texto: el cliente recibe los datos y el link, sin la foto.
+ */
+async function sendWithFallback(
+  api: WhatsAppApi,
+  to: string,
+  payload: OutboundPayload,
+  message: schema.Message,
+): Promise<{ wamid: string }> {
+  try {
+    return await api.send(to, payload)
+  } catch (error) {
+    if (payload.type !== "image" || (error instanceof GraphError && error.tokenInvalid)) throw error
+    console.error("[whatsapp] no se pudo mandar la foto, va solo el texto", error instanceof Error ? error.message : error)
+    return api.send(to, { type: "text", text: message.body?.trim() || "…" })
+  }
+}
+
 export async function deliverMessage(
   scoped: ScopedDb,
   api: WhatsAppApi,
@@ -55,7 +74,7 @@ export async function deliverMessage(
   payload?: OutboundPayload,
 ): Promise<schema.Message> {
   try {
-    const { wamid } = await api.send(to, payload ?? toOutboundPayload(message))
+    const { wamid } = await sendWithFallback(api, to, payload ?? toOutboundPayload(message), message)
     const [sent] = await scoped.messages.update(eq(schema.messages.id, message.id), {
       wamid,
       status: "sent",

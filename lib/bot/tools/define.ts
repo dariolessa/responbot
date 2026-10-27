@@ -27,6 +27,8 @@ export type ToolContext = {
   canBook: boolean
   /** Opciones para tocar que acompañan la respuesta (herramienta show_choices). */
   choices: schema.MessageChoices | null
+  /** Fichas del catálogo que se mandan antes de la respuesta (send_catalog_items). */
+  cards: string[]
 }
 
 /** Error que se devuelve al modelo como resultado de la herramienta (is_error). */

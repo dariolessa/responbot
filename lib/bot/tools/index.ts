@@ -9,10 +9,12 @@ import {
 import { getBusinessInfo, listServices, listStaff } from "./catalog"
 import { showChoices } from "./choices"
 import { handoffToHuman, saveCustomerName } from "./customer"
+import { searchCatalogTool, sendCatalogItems } from "./listings"
 import { toApiTool, ToolError, type BotTool, type ToolContext } from "./define"
 
 /**
- * Las once herramientas del SPEC más show_choices (mensajes interactivos), en
+ * Las once herramientas del SPEC más show_choices (mensajes interactivos) y las
+ * del catálogo (search_catalog, send_catalog_items), en
  * un orden fijo: el orden forma parte del prefijo cacheado.
  */
 export const botTools: BotTool[] = [
@@ -28,6 +30,8 @@ export const botTools: BotTool[] = [
   saveCustomerName,
   handoffToHuman,
   showChoices,
+  searchCatalogTool,
+  sendCatalogItems,
 ] as BotTool[]
 
 export const apiTools = botTools.map(toApiTool)

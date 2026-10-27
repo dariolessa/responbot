@@ -4,7 +4,7 @@ import Anthropic from "@anthropic-ai/sdk"
 
 import { env } from "@/lib/env"
 
-import type { BotModel, BotRequest, ImageDescriber } from "./types"
+import type { BotModel, BotRequest, ImageDescriber, StructuredModel } from "./types"
 
 /*
  * Cliente de Claude para el bot (docs/SPEC.md, "Anthropic"). El motor recibe
@@ -91,6 +91,33 @@ export function anthropicDescriber(): ImageDescriber {
         .flatMap((b) => (b.type === "text" ? [b.text] : []))
         .join(" ")
         .trim()
+    },
+  }
+}
+
+/** Extracción de datos con el modelo de tareas cortas (importador del catálogo). */
+export function anthropicStructured(): StructuredModel {
+  if (!env.ANTHROPIC_API_KEY) {
+    throw new Error("Falta ANTHROPIC_API_KEY: el importador del catálogo necesita la clave de Anthropic.")
+  }
+  client ??= new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, maxRetries: 2 })
+  const anthropic = client
+
+  return {
+    async run({ system, prompt, tool }) {
+      const response = await anthropic.messages.create(
+        {
+          model: SHORT_TASK_MODEL,
+          max_tokens: 8000,
+          system,
+          tools: [tool],
+          tool_choice: { type: "tool", name: tool.name },
+          messages: [{ role: "user", content: prompt }],
+        },
+        { timeout: 60_000 },
+      )
+      const call = response.content.find((b) => b.type === "tool_use")
+      return call?.type === "tool_use" ? call.input : null
     },
   }
 }

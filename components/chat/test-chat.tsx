@@ -24,6 +24,8 @@ const toolLabels: Record<string, string> = {
   save_customer_name: "Guardó el nombre",
   handoff_to_human: "Derivó a una persona",
   show_choices: "Mostró opciones",
+  search_catalog: "Buscó en el catálogo",
+  send_catalog_items: "Mandó fichas",
 }
 
 const suggestions = ["Hola, ¿qué servicios tienen?", "Quiero un turno para mañana", "¿Dónde quedan?"]
@@ -124,7 +126,7 @@ export function TestChat({
         {pendingText ? (
           <>
             <Bubble
-              message={{ id: "pending", direction: "inbound", body: pendingText, at: "", tools: [], failed: false, choices: [] }}
+              message={{ id: "pending", direction: "inbound", body: pendingText, at: "", tools: [], failed: false, choices: [], imageUrl: null }}
             />
             <div className="flex" aria-live="polite">
               <span className="inline-flex items-center gap-1 rounded-2xl rounded-bl-sm border bg-background px-3.5 py-3">
@@ -224,6 +226,16 @@ function Bubble({ message, onChoose }: { message: ChatMessage; onChoose?: (text:
           message.failed && "border-destructive/30",
         )}
       >
+        {message.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- fotos del catálogo, de la web del negocio
+          <img
+            src={message.imageUrl}
+            alt=""
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            className="mb-2 aspect-[4/3] w-64 max-w-full rounded-lg object-cover"
+          />
+        ) : null}
         {message.body}
       </p>
       {!fromCustomer && message.choices.length > 0 ? (

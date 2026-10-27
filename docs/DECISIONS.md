@@ -186,3 +186,15 @@ Decisiones que el SPEC no define, tomadas con el criterio "la opción más simpl
 | Demo pública | Un negocio más con `businesses.is_demo` (uno solo; "Crear la demo" devuelve el existente), creado desde `/admin` con el admin como dueño, servicios de barbería y dos profesionales. Nunca vence. El prompt suma un bloque "Demo" (turnos de prueba, qué es Responbot y la web). El número se conecta con el alta embebida de siempre. | Reusa todo el flujo real, que es lo que se quiere mostrar. |
 | Borrado de la demo | Cron `demo-reset` a las 06:00 UTC (03:00 en Montevideo): borra pagos, turnos, lista de espera, mensajes programados, avisos, conversaciones y clientes de los visitantes. Quedan catálogo, equipo, configuración y el cliente del chat de prueba. | Que la agenda de la demo no se llene y no queden datos de desconocidos más de un día. |
 | Botón de la demo | `NEXT_PUBLIC_DEMO_WHATSAPP` (solo dígitos) muestra "Probá la demo en WhatsApp" en la landing, con un enlace `wa.me` y el primer mensaje escrito. Sin la variable no aparece. | No mostrar un número que todavía no funciona. |
+
+## Catálogo desde la web
+
+| Tema | Decisión | Motivo |
+| --- | --- | --- |
+| Alcance | Catálogo genérico (`catalog_sources`, `catalog_items`), no un módulo solo de inmobiliarias. Sección "Catálogo" para dueño y admins (`manageCatalog`). | Dario lo pidió para inmobiliarias; el mismo mecanismo sirve para cualquier negocio que publique productos. |
+| Fuentes | Web del negocio leída con un lector propio y Claude Haiku. Instagram y MercadoLibre se guardan con un aviso hasta conectar sus APIs oficiales (ver docs/CATALOGO.md). | Scrapearlos no es estable y viola sus términos. |
+| Lectura | Página dada + hasta 30 fichas enlazadas, 4 a la vez. Sin paginación: si el listado tiene varias páginas, se carga cada una como fuente. | Acota costo y tiempo (cabe en `after` con `maxDuration` 300). |
+| Reimportación | Diaria (cron horario con tope de 6 fuentes). Lo editado a mano no se pisa; lo que desaparece queda oculto, no se borra. Una lectura sin resultados no oculta nada. | La web es la fuente de verdad, pero el dueño puede corregir; un error pasajero no debe vaciar el catálogo. |
+| Fotos | Se usan los links originales, sin copiarlas a un almacenamiento propio. | Evita sumar Blob y costos ahora; si la foto falla, WhatsApp recibe el texto. |
+| Envío | Una ficha = un mensaje de imagen con epígrafe (hasta 1024 caracteres), antes del texto del bot; máximo 3 por respuesta. | WhatsApp no tiene tarjetas con varias fotos fuera del catálogo de Meta Commerce. |
+| Precios | Enteros en centésimos con su moneda por ficha; se muestran con símbolo (`US$`, `$`). El filtro de precio del bot solo compara fichas de la misma moneda. | En inmobiliarias conviven dólares (venta) y pesos (alquiler). |

@@ -6,6 +6,7 @@ import { billingState } from "@/lib/billing/state"
 import * as schema from "@/lib/db/schema"
 import type { ScopedDb } from "@/lib/db/scoped"
 import type { Anthropic, BotModel } from "@/lib/integrations/anthropic/types"
+import { availableItems, catalogCaption } from "@/lib/listings/items"
 import { minutesOfDay, toDateString, weekdayOf } from "@/lib/time"
 
 import { isWithinOpeningHours, loadCatalog } from "./catalog"
@@ -251,7 +252,7 @@ async function runTurn(
   const customer = await scoped.customers.findById(conversation.customerId)
   if (!customer) throw new Error("bot: no existe el cliente")
 
-  const [rules, settings, catalog, upcomingRows] = await Promise.all([
+  const [rules, settings, catalog, upcomingRows, catalogItems] = await Promise.all([
     scoped.bookingRules.findFirst(),
     scoped.botSettings.findFirst(),
     loadCatalog(scoped, business.currency),
@@ -264,6 +265,7 @@ async function runTurn(
       orderBy: asc(schema.bookings.startsAt),
       limit: 5,
     }),
+    scoped.catalogItems.count(eq(schema.catalogItems.available, true)),
   ])
 
   const recent = await scoped.messages.findMany({
@@ -281,7 +283,15 @@ async function runTurn(
   const serviceName = new Map(catalog.services.map((s) => [s.id, s.name]))
   const staffName = new Map(catalog.staff.map((s) => [s.id, s.name]))
   const system = systemBlocks(
-    fixedBlock({ business, rules, settings, catalog, demoUrl: business.isDemo ? publicAppUrl() : null }),
+    fixedBlock({
+      business,
+      rules,
+      settings,
+      catalog,
+      demoUrl: business.isDemo ? publicAppUrl() : null,
+      // Redondeado: así la cantidad no invalida la caché del prompt con cada publicación nueva.
+      catalogItems: catalogItems === 0 ? 0 : catalogItems < 10 ? catalogItems : Math.round(catalogItems / 10) * 10,
+    }),
     contextBlock({
       business,
       customer,
@@ -307,6 +317,7 @@ async function runTurn(
     now,
     canBook,
     choices: null,
+    cards: [],
   }
 
   const trace: MessageTrace = {
@@ -379,6 +390,18 @@ async function runTurn(
       : FALLBACK_REPLY
   }
 
+  // Fichas del catálogo: una por mensaje, con su foto, antes de la respuesta.
+  if (!humanMode && ctx.cards.length > 0) {
+    for (const item of await availableItems(scoped, ctx.cards)) {
+      await saveReply(input, {
+        text: catalogCaption(item),
+        trace: null,
+        imageUrl: item.imageUrls[0] ?? null,
+        at: input.clock(),
+      })
+    }
+  }
+
   // Al derivar no quedan opciones colgando: ya no responde el bot.
   const choices = humanMode ? null : ctx.choices
   const message = await saveReply(input, { text, trace, choices, at: input.clock() })
@@ -391,14 +414,22 @@ async function runTurn(
 
 async function saveReply(
   input: Pick<HandleMessageInput, "scoped" | "conversationId" | "channel" | "onReply">,
-  reply: { text: string; trace: MessageTrace | null; choices?: schema.MessageChoices | null; at: Date },
+  reply: {
+    text: string
+    trace: MessageTrace | null
+    choices?: schema.MessageChoices | null
+    /** Foto que acompaña al texto (fichas del catálogo); el texto va de epígrafe. */
+    imageUrl?: string | null
+    at: Date
+  },
 ): Promise<schema.Message> {
   const { scoped, conversationId, channel } = input
   const [message] = await scoped.messages.insert({
     conversationId,
     direction: "outbound",
-    type: reply.choices ? "interactive" : "text",
+    type: reply.imageUrl ? "image" : reply.choices ? "interactive" : "text",
     body: reply.text,
+    mediaUrl: reply.imageUrl ?? null,
     choices: reply.choices ?? null,
     // En WhatsApp queda en cola hasta que lo envía lib/whatsapp; en el chat de prueba ya se "entregó".
     status: channel === "whatsapp" ? "queued" : "sent",

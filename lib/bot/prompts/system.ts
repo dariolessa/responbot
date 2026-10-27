@@ -31,6 +31,8 @@ export function fixedBlock(input: {
   catalog: Catalog
   /** Para la demo pública: la web de Responbot, que el bot comparte si le preguntan. */
   demoUrl?: string | null
+  /** Publicaciones disponibles en el catálogo aprendido de la web (0 = no tiene). */
+  catalogItems?: number
 }): string {
   const { business, rules, settings, catalog } = input
   const template = templateFor(business.archetype)
@@ -90,10 +92,23 @@ export function fixedBlock(input: {
     `# Equipo\n\n${staff}`,
     `# Políticas\n\n${policies}`,
     `# Preguntas frecuentes\n\n${faq}`,
+    input.catalogItems ? catalogBlock(input.catalogItems) : "",
     business.isDemo ? demoBlock(input.demoUrl ?? null) : "",
   ]
     .filter(Boolean)
     .join("\n\n")
+}
+
+function catalogBlock(count: number): string {
+  return [
+    "# Catálogo",
+    "",
+    `El negocio tiene un catálogo de ${count === 1 ? "1 publicación disponible" : `unas ${count} publicaciones disponibles`} (propiedades, productos o lo que publica en su web).`,
+    "- Si el cliente pregunta qué hay, busca algo concreto o pide opciones, usá search_catalog. Si te falta un dato clave para buscar bien (zona, presupuesto, venta o alquiler), preguntá uno solo antes.",
+    "- Para mostrar opciones, mandá las 2 o 3 que mejor le sirvan con send_catalog_items (salen con foto, precio y link). No pegues los datos en el texto.",
+    "- Nunca inventes publicaciones, precios ni datos: solo lo que devuelven las herramientas. Si no hay nada que coincida, decilo y ofrecé alternativas o pasarle con una persona.",
+    "- Si le interesa una, ofrecé coordinar una visita o una consulta con la agenda (si hay un servicio para eso) o pasarle con una persona del equipo.",
+  ].join("\n")
 }
 
 function demoBlock(url: string | null): string {

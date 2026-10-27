@@ -115,6 +115,8 @@ export const scheduledKindEnum = pgEnum("scheduled_kind", [
   "deposit_refunded",
   "waitlist_taken",
 ])
+export const catalogSourceKindEnum = pgEnum("catalog_source_kind", ["web", "mercadolibre", "instagram"])
+export const catalogImportStatusEnum = pgEnum("catalog_import_status", ["pending", "running", "ok", "error"])
 export const scheduledStatusEnum = pgEnum("scheduled_status", [
   "pending",
   "sent",
@@ -784,6 +786,59 @@ export const usageCounters = pgTable(
   (t) => [uniqueIndex().on(t.businessId, t.period)],
 )
 
+// ---------------------------------------------------------------------------
+// Catálogo aprendido desde URLs (docs/CATALOGO.md): propiedades, productos o
+// lo que el negocio publique. El bot lo busca y manda fichas con foto.
+
+export const catalogSources = pgTable(
+  "catalog_sources",
+  {
+    id: id(),
+    businessId: businessRef(),
+    kind: catalogSourceKindEnum("kind").notNull().default("web"),
+    url: text("url").notNull(),
+    status: catalogImportStatusEnum("status").notNull().default("pending"),
+    lastImportedAt: timestamp("last_imported_at", { withTimezone: true }),
+    /** Motivo del último error, en palabras para el dueño. */
+    lastError: text("last_error"),
+    itemCount: integer("item_count").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex().on(t.businessId, t.url)],
+)
+
+export type CatalogAttribute = { label: string; value: string }
+
+export const catalogItems = pgTable(
+  "catalog_items",
+  {
+    id: id(),
+    businessId: businessRef(),
+    /** Nulo = cargado a mano. Si se borra la fuente, sus fichas se borran. */
+    sourceId: uuid("source_id").references(() => catalogSources.id, { onDelete: "cascade" }),
+    /** Clave estable dentro de la fuente (el link de la ficha) para reimportar sin duplicar. */
+    externalKey: text("external_key"),
+    title: text("title").notNull(),
+    description: text("description"),
+    /** En centésimos, con su moneda; nulo = "consultar". */
+    price: integer("price"),
+    currency: text("currency"),
+    /** Venta, alquiler, etc. Texto libre. */
+    operation: text("operation"),
+    location: text("location"),
+    attributes: jsonb("attributes").$type<CatalogAttribute[]>().notNull().default([]),
+    imageUrls: jsonb("image_urls").$type<string[]>().notNull().default([]),
+    url: text("url"),
+    /** false = el bot no la ofrece (vendida, pausada o que dejó de aparecer en la fuente). */
+    available: boolean("available").notNull().default(true),
+    /** Editada en el panel: la reimportación ya no pisa sus datos. */
+    editedManually: boolean("edited_manually").notNull().default(false),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex().on(t.businessId, t.sourceId, t.externalKey), index().on(t.businessId, t.available)],
+)
+
 export const auditLogs = pgTable(
   "audit_logs",
   {
@@ -822,3 +877,5 @@ export type Payment = typeof payments.$inferSelect
 export type MpAccount = typeof mpAccounts.$inferSelect
 export type WaitlistEntry = typeof waitlistEntries.$inferSelect
 export type BotFeedback = typeof botFeedback.$inferSelect
+export type CatalogSource = typeof catalogSources.$inferSelect
+export type CatalogItem = typeof catalogItems.$inferSelect

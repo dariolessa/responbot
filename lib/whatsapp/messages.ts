@@ -22,9 +22,20 @@ export function isWindowOpen(lastInboundAt: Date | null, now: Date = new Date())
   return Boolean(lastInboundAt && now.getTime() - lastInboundAt.getTime() < SERVICE_WINDOW_MS)
 }
 
-/** Cómo se manda una respuesta: con opciones, como botones o lista si entran; si no, como texto numerado. */
-export function toOutboundPayload(message: { body: string | null; choices: MessageChoices | null }): OutboundPayload {
+/**
+ * Cómo se manda una respuesta: una ficha con foto como imagen con epígrafe;
+ * con opciones, como botones o lista si entran; si no, como texto numerado.
+ */
+export function toOutboundPayload(message: {
+  body: string | null
+  choices: MessageChoices | null
+  type?: string
+  mediaUrl?: string | null
+}): OutboundPayload {
   const text = (message.body ?? "").trim()
+  if (message.type === "image" && message.mediaUrl && /^https?:\/\//.test(message.mediaUrl)) {
+    return { type: "image", image: { link: message.mediaUrl, ...(text ? { caption: text.slice(0, BODY_MAX) } : {}) } }
+  }
   const choices = message.choices?.options ?? []
   if (choices.length === 0) return { type: "text", text: text || "…" }
 
