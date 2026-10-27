@@ -30,7 +30,7 @@ export type BookingPayload = {
 }
 
 export type NotificationPayloads = {
-  "booking.created": BookingPayload & { byBot: boolean }
+  "booking.created": BookingPayload & { byBot: boolean; awaitingDeposit?: boolean }
   "booking.changed": BookingPayload & { change: "cancelled" | "rescheduled"; byCustomer: boolean }
   "booking.unconfirmed": BookingPayload
   "conversation.handoff": {
@@ -51,6 +51,8 @@ export type NotificationPayloads = {
     botBookings: number
   }
   "whatsapp.disconnected": { status: "token_expired" | "disconnected" }
+  "deposit.paid": BookingPayload & { amount: string }
+  "mercadopago.disconnected": Record<string, never>
   "team.invitation_accepted": { memberName: string; roleLabel: string }
 }
 
@@ -114,6 +116,17 @@ export const notificationTypes: Record<NotificationType, NotificationDefinition>
     channels: ["in_app", "push", "email"],
     defaults: () => ({ ...off, in_app: true, push: true, email: true }),
   },
+  "deposit.paid": {
+    label: "Seña pagada",
+    channels: ["in_app"],
+    defaults: () => ({ ...off, in_app: true }),
+    forStaff: true,
+  },
+  "mercadopago.disconnected": {
+    label: "Mercado Pago desconectado",
+    channels: ["in_app", "email"],
+    defaults: () => ({ ...off, in_app: true, email: true }),
+  },
   "team.invitation_accepted": {
     label: "Invitación aceptada",
     channels: ["in_app"],
@@ -143,7 +156,7 @@ export function renderNotification<T extends NotificationType>(
       const p = payload as NotificationPayloads["booking.created"]
       return {
         title: p.byBot ? "Reserva nueva por WhatsApp" : "Reserva nueva",
-        body: bookingLine(p),
+        body: p.awaitingDeposit ? `${bookingLine(p)} Espera la seña.` : bookingLine(p),
         url: `/app/agenda?fecha=${p.date}`,
       }
     }
@@ -199,6 +212,20 @@ export function renderNotification<T extends NotificationType>(
         title: "WhatsApp se desconectó",
         body: "El bot dejó de responder. Volvé a conectar WhatsApp desde Configuración.",
         url: "/app/configuracion#whatsapp",
+      }
+    case "deposit.paid": {
+      const p = payload as NotificationPayloads["deposit.paid"]
+      return {
+        title: "Seña pagada",
+        body: `${p.customerName} pagó ${p.amount} de seña: ${p.serviceName} con ${p.staffName}, ${p.day} a las ${p.time}.`,
+        url: `/app/agenda?fecha=${p.date}`,
+      }
+    }
+    case "mercadopago.disconnected":
+      return {
+        title: "Mercado Pago se desconectó",
+        body: "No se pueden cobrar señas: los turnos nuevos se confirman sin seña. Volvé a conectar Mercado Pago desde Configuración.",
+        url: "/app/configuracion#mercadopago",
       }
     case "team.invitation_accepted": {
       const p = payload as NotificationPayloads["team.invitation_accepted"]

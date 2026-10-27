@@ -10,8 +10,8 @@ import { accountToken, graphOptions } from "./deps"
 /*
  * Cron diario token-health, parte de WhatsApp: si el token de un negocio ya
  * no sirve, la cuenta pasa a token_expired, Configuración pide reconectar y
- * el despachador avisa a dueño y admins (panel, push y correo). Mercado Pago
- * llega con la Fase 5.
+ * el despachador avisa a dueño y admins (panel, push y correo). La parte de
+ * Mercado Pago está en lib/payments/token-health.ts.
  */
 export async function checkWhatsAppTokens() {
   const accounts = await forPlatform(db).activeWhatsAppAccounts()

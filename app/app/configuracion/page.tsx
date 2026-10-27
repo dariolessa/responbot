@@ -1,15 +1,16 @@
-import { CreditCard } from "lucide-react"
+import { eq } from "drizzle-orm"
 import type { Metadata } from "next"
 
 import { RulesForm } from "@/components/forms/rules-form"
 import { PageHeader } from "@/components/layout/page-header"
 import { PendingStepsCard } from "@/components/onboarding/pending-steps"
-import { Badge } from "@/components/ui/badge"
 import { can, roleLabels } from "@/lib/auth/roles"
 import { getTenant } from "@/lib/auth/tenant"
+import * as schema from "@/lib/db/schema"
 import { defaultRules, rulesToForm } from "@/lib/rules"
 
 import { BusinessForm } from "./business-form"
+import { MercadoPagoSection } from "./mercadopago-section"
 import { WhatsAppSection } from "./whatsapp-section"
 
 export const metadata: Metadata = { title: "Configuración" }
@@ -34,12 +35,17 @@ function Section({
   )
 }
 
-export default async function ConfiguracionPage() {
+export default async function ConfiguracionPage({ searchParams }: PageProps<"/app/configuracion">) {
+  const { mercadopago } = await searchParams
   const { db, role, user } = await getTenant()
   const manage = can(role, "manageBusinessSettings")
-  const [business, rules] = manage
-    ? await Promise.all([db.business(), db.bookingRules.findFirst()])
-    : [null, null]
+  const [business, rules, mpAccount] = manage
+    ? await Promise.all([
+        db.business(),
+        db.bookingRules.findFirst(),
+        db.mpAccounts.findFirst(eq(schema.mpAccounts.status, "active")),
+      ])
+    : [null, null, null]
 
   return (
     <>
@@ -70,19 +76,13 @@ export default async function ConfiguracionPage() {
               mode="settings"
               currency={business.currency}
               initial={rulesToForm(rules ?? defaultRules)}
+              mercadoPagoConnected={Boolean(mpAccount)}
             />
           </Section>
           <Section title="Conexiones" description="WhatsApp para el bot y Mercado Pago para las señas.">
             <div className="grid gap-3">
               <WhatsAppSection db={db} />
-              <div className="flex items-center gap-3 rounded-lg border p-4">
-                <CreditCard className="size-5 text-muted-foreground" />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-medium">Mercado Pago</span>
-                  <span className="block text-sm text-muted-foreground">Para cobrar señas al reservar.</span>
-                </span>
-                <Badge variant="secondary">Muy pronto</Badge>
-              </div>
+              <MercadoPagoSection db={db} notice={typeof mercadopago === "string" ? mercadopago : undefined} />
             </div>
           </Section>
         </>

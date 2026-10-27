@@ -2,6 +2,10 @@ import "server-only"
 
 import { db } from "@/lib/db"
 import { forBusiness, forPlatform } from "@/lib/db/scoped"
+import { expireOldWaitlist } from "@/lib/booking/waitlist"
+import { paymentDeps } from "@/lib/payments/deps"
+import { checkMercadoPagoTokens } from "@/lib/payments/token-health"
+import { expireHolds } from "@/lib/payments/mercadopago"
 import { checkWhatsAppTokens } from "@/lib/whatsapp/token-health"
 import { MAX_ATTEMPTS } from "@/lib/whatsapp/scheduled"
 
@@ -48,16 +52,34 @@ export async function runDailySummary(now = new Date()) {
   return forEachBusiness(
     businesses.map((b) => b.id),
     async (id) => {
-      const result = await runHourlyForBusiness(forBusiness(db, id), timezones.get(id)!, now, deps.email, deps.appUrl)
+      const scoped = forBusiness(db, id)
+      await expireOldWaitlist(scoped, timezones.get(id)!, now)
+      const result = await runHourlyForBusiness(scoped, timezones.get(id)!, now, deps.email, deps.appUrl)
       if (result.daily || result.weekly) await flushBusiness(db, id, deps, now)
     },
   )
 }
 
-/** Diario: tokens de WhatsApp; a los que se vencieron les llega el aviso enseguida. */
+/** Cada 5 minutos: vence los turnos retenidos sin seña (antes pregunta a Mercado Pago si se pagó). */
+export async function runExpireHolds(now = new Date()) {
+  const ids = await forPlatform(db).businessesWithExpiredHolds(now)
+  const deps = deliveryDeps()
+  return forEachBusiness(ids, async (id) => {
+    await expireHolds(forBusiness(db, id), deps.payments ?? null, now)
+    // Aviso al cliente y ofertas a la lista de espera, enseguida.
+    await flushBusiness(db, id, deps, now)
+  })
+}
+
+/** Diario: tokens de WhatsApp y Mercado Pago; a los que se vencieron les llega el aviso enseguida. */
 export async function runTokenHealth(now = new Date()) {
   const whatsapp = await checkWhatsAppTokens()
+  const mercadopago = await checkMercadoPagoTokens(paymentDeps(), now)
   const deps = deliveryDeps()
-  await forEachBusiness(whatsapp.expired, (id) => flushBusiness(db, id, deps, now))
-  return { whatsapp: { checked: whatsapp.checked, expired: whatsapp.expired.length } }
+  const broken = [...new Set([...whatsapp.expired, ...mercadopago.expired])]
+  await forEachBusiness(broken, (id) => flushBusiness(db, id, deps, now))
+  return {
+    whatsapp: { checked: whatsapp.checked, expired: whatsapp.expired.length },
+    mercadopago: { checked: mercadopago.checked, refreshed: mercadopago.refreshed, expired: mercadopago.expired.length },
+  }
 }

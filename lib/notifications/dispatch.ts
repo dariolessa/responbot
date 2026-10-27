@@ -216,6 +216,7 @@ export function ownerTemplate(
 
 const emailButtonLabels: Partial<Record<NotificationType, string>> = {
   "whatsapp.disconnected": "Reconectar WhatsApp",
+  "mercadopago.disconnected": "Reconectar Mercado Pago",
   "summary.daily": "Ver la agenda",
   "summary.weekly": "Ver estadísticas",
 }

@@ -2,6 +2,7 @@ import { and, asc, eq, gt, inArray, isNull, lt, ne, or } from "drizzle-orm"
 
 import * as schema from "@/lib/db/schema"
 import type { ScopedDb } from "@/lib/db/scoped"
+import { depositFor } from "@/lib/payments/deposits"
 
 import { onBookingChange } from "./customer-messages"
 import {
@@ -99,6 +100,32 @@ export type CreateBookingInput = {
   serviceId: string
   startsAt: Date
   source: (typeof schema.bookingSourceEnum.enumValues)[number]
+  /**
+   * Pedir seña si corresponde (reglas, servicio e inasistencias del cliente) y
+   * Mercado Pago está conectado: el turno queda retenido (pending_payment)
+   * hasta que se pague o venza la retención.
+   */
+  requestDeposit?: boolean
+}
+
+/** Seña que corresponde a un turno nuevo; 0 si no hay o si Mercado Pago no está conectado. */
+export async function depositForBooking(
+  tx: ScopedDb,
+  input: { price: number; depositOverride: number | null; customer: schema.Customer },
+): Promise<{ amount: number; holdMinutes: number }> {
+  const [rules, account] = await Promise.all([
+    tx.bookingRules.findFirst(),
+    tx.mpAccounts.findFirst(eq(schema.mpAccounts.status, "active")),
+  ])
+  const holdMinutes = rules?.holdMinutes ?? 15
+  if (!account || input.customer.isTest) return { amount: 0, holdMinutes }
+  const amount = depositFor({
+    rules,
+    price: input.price,
+    depositOverride: input.depositOverride,
+    customerNoShows: input.customer.noShowCount,
+  })
+  return { amount, holdMinutes }
 }
 
 export async function createBooking(
@@ -122,24 +149,34 @@ export async function createBooking(
       const endsAt = new Date(input.startsAt.getTime() + terms.durationMinutes * MINUTE)
       await assertNoTimeOff(tx, input.resourceId, input.startsAt, endsAt)
 
+      const now = options.now ?? new Date()
+      const deposit = input.requestDeposit
+        ? await depositForBooking(tx, { price: terms.price, depositOverride: terms.service.depositOverride, customer })
+        : { amount: 0, holdMinutes: 0 }
+      const held = deposit.amount > 0
+      const status = held ? ("pending_payment" as const) : ("confirmed" as const)
+
       const [booking] = await tx.bookings.insert({
         customerId: customer.id,
         resourceId: input.resourceId,
         serviceId: input.serviceId,
         startsAt: input.startsAt,
         endsAt,
-        status: "confirmed",
+        status,
         price: terms.price,
         currency: business.currency,
-        // Las señas con Mercado Pago llegan en la Fase 5; un turno del panel se confirma directo.
-        depositAmount: 0,
-        depositStatus: "none",
+        depositAmount: deposit.amount,
+        depositStatus: held ? "pending" : "none",
+        // La retención nunca pasa del inicio del turno.
+        holdExpiresAt: held
+          ? new Date(Math.min(now.getTime() + deposit.holdMinutes * MINUTE, input.startsAt.getTime()))
+          : null,
         source: input.source,
       })
       await tx.bookingEvents.insert({
         bookingId: booking!.id,
         fromStatus: null,
-        toStatus: "confirmed",
+        toStatus: status,
         actorType: actor.type,
         actorId: actor.id,
         channel: actor.channel,
@@ -206,7 +243,11 @@ export async function moveBooking(
         actorId: actor.id,
         channel: actor.channel,
       })
-      await onBookingChange(tx, updated!, { kind: "moved", previousStartsAt: booking.startsAt }, actor, options.now)
+      await onBookingChange(tx, updated!, {
+          kind: "moved",
+          previousStartsAt: booking.startsAt,
+          previous: { resourceId: booking.resourceId, startsAt: booking.startsAt, endsAt: booking.endsAt },
+        }, actor, options.now)
       return updated!
     })
   } catch (error) {

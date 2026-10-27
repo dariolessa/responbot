@@ -5,11 +5,14 @@ import { addUsage, usagePeriod } from "@/lib/bot/usage"
 import { changeBookingStatus } from "@/lib/booking/create"
 import { bookingPayload } from "@/lib/booking/customer-messages"
 import { isOpen } from "@/lib/booking/policies"
+import { waitlistButtonId } from "@/lib/booking/waitlist"
 import * as schema from "@/lib/db/schema"
 import type { ScopedDb } from "@/lib/db/scoped"
 import type { WhatsAppApi } from "@/lib/integrations/whatsapp/client"
 import { fillTemplate, templatePayload, type TemplateName } from "@/lib/integrations/whatsapp/templates"
+import { formatMoney } from "@/lib/money"
 import { notify } from "@/lib/notifications/dispatch"
+import { ensurePaymentLink, type PaymentDeps } from "@/lib/payments/mercadopago"
 import { formatZoned, toTimeString } from "@/lib/time"
 
 import { findOrCreateConversation } from "./inbound"
@@ -31,7 +34,11 @@ export const MAX_ATTEMPTS = 3
 /** Un recordatorio que no salió a tiempo (Meta caída, cron frenado) ya no sirve después de esto. */
 const REMINDER_GRACE_MS = 3 * 3_600_000
 
-export type ScheduledDeps = { whatsapp: ((account: schema.WhatsAppAccount) => WhatsAppApi) | null }
+export type ScheduledDeps = {
+  whatsapp: ((account: schema.WhatsAppAccount) => WhatsAppApi) | null
+  /** Para crear el link de la seña la primera vez que se manda. */
+  payments?: PaymentDeps | null
+}
 
 type Outcome = { status: "sent" | "failed" | "cancelled"; error?: string | null; messageId?: string }
 
@@ -55,7 +62,7 @@ export function parseReminderButton(id: string | null | undefined): { action: Re
 
 const firstName = (name: string | null) => name?.trim().split(/\s+/)[0] || "qué tal"
 
-/** Plantilla y variables de cada tipo de mensaje programado. */
+/** Plantilla de cada tipo de mensaje programado. */
 function messageFor(kind: schema.ScheduledMessage["kind"]): TemplateName | null {
   switch (kind) {
     case "reminder_24h":
@@ -66,15 +73,34 @@ function messageFor(kind: schema.ScheduledMessage["kind"]): TemplateName | null 
       return "confirmacion_turno"
     case "booking_cancelled":
       return "turno_cancelado"
+    case "deposit_request":
+      return "sena_pendiente"
+    case "hold_expired":
+      return "retencion_vencida"
+    case "deposit_refunded":
+      return "sena_devuelta"
+    case "waitlist_offer":
+      return "lugar_liberado"
+    case "waitlist_taken":
+      return "lugar_tomado"
     default:
       return null
   }
 }
 
-function paramsFor(
-  template: TemplateName,
-  d: { name: string; service: string; staff: string; day: string; time: string; address: string },
-): string[] {
+type MessageData = {
+  name: string
+  service: string
+  staff: string
+  day: string
+  time: string
+  address: string
+  deposit: string
+  link: string
+  holdUntil: string
+}
+
+function paramsFor(template: TemplateName, d: MessageData): string[] {
   switch (template) {
     case "recordatorio_turno":
     case "confirmacion_turno":
@@ -82,9 +108,48 @@ function paramsFor(
     case "recordatorio_corto":
       return [d.name, d.time, d.service, d.address]
     case "turno_cancelado":
+    case "retencion_vencida":
+    case "lugar_liberado":
+    case "lugar_tomado":
       return [d.name, d.service, d.day, d.time]
+    case "sena_pendiente":
+      return [d.name, d.service, d.day, d.time, d.deposit, d.link, d.holdUntil]
+    case "sena_devuelta":
+      return [d.name, d.deposit, d.service, d.day]
     default:
       return []
+  }
+}
+
+/** Lo que dice el mensaje: el turno, o el horario ofrecido de la lista de espera. */
+type Subject = { serviceId: string; resourceId: string; startsAt: Date }
+
+/** ¿Sigue teniendo sentido mandarlo? Devuelve el motivo si no. */
+function staleReason(
+  kind: schema.ScheduledMessage["kind"],
+  booking: schema.Booking | undefined,
+  entry: schema.WaitlistEntry | undefined,
+  now: Date,
+): string | null {
+  switch (kind) {
+    case "waitlist_offer":
+      return entry?.status === "offered" && entry.offeredStartsAt && entry.offeredStartsAt > now
+        ? null
+        : "La oferta ya no está vigente."
+    case "waitlist_taken":
+      return entry ? null : "La espera ya no existe."
+    case "booking_cancelled":
+      return booking?.status === "cancelled" ? null : "El turno ya no está cancelado."
+    case "hold_expired":
+      return booking?.status === "expired" && booking.startsAt > now ? null : "El turno ya no está vencido."
+    case "deposit_refunded":
+      return booking?.depositStatus === "refunded" ? null : "La seña no figura devuelta."
+    case "deposit_request":
+      return booking?.status === "pending_payment" && booking.holdExpiresAt && booking.holdExpiresAt > now
+        ? null
+        : "El turno ya no espera la seña."
+    default:
+      return booking && isOpen(booking.status) && booking.startsAt > now ? null : "El turno ya no está vigente."
   }
 }
 
@@ -96,14 +161,12 @@ async function sendOne(
 ): Promise<Outcome> {
   const isReminder = row.kind === "reminder_24h" || row.kind === "reminder_2h"
   const booking = row.bookingId ? await scoped.bookings.findById(row.bookingId) : undefined
+  const entry = row.waitlistEntryId ? await scoped.waitlistEntries.findById(row.waitlistEntryId) : undefined
   const customer = await scoped.customers.findById(row.customerId)
-  if (!booking || !customer || customer.isTest) return { status: "cancelled", error: "El turno ya no existe." }
+  if ((!booking && !entry) || !customer || customer.isTest) return { status: "cancelled", error: "El turno ya no existe." }
 
-  if (row.kind === "booking_cancelled") {
-    if (booking.status !== "cancelled") return { status: "cancelled", error: "El turno ya no está cancelado." }
-  } else if (!isOpen(booking.status) || booking.startsAt <= now) {
-    return { status: "cancelled", error: "El turno ya no está vigente." }
-  }
+  const stale = staleReason(row.kind, booking, entry, now)
+  if (stale) return { status: "cancelled", error: stale }
   if (isReminder && now.getTime() - row.sendAt.getTime() > REMINDER_GRACE_MS) {
     return { status: "cancelled", error: "No salió a tiempo." }
   }
@@ -114,28 +177,46 @@ async function sendOne(
   const account = await scoped.whatsappAccounts.findFirst(eq(schema.whatsappAccounts.status, "active"))
   if (!account || !deps.whatsapp) return { status: "failed", error: "WhatsApp no está conectado." }
 
+  const subject: Subject | null = booking
+    ? booking
+    : entry?.offeredStartsAt && entry.offeredResourceId
+      ? { serviceId: entry.serviceId, resourceId: entry.offeredResourceId, startsAt: entry.offeredStartsAt }
+      : null
+  if (!subject) return { status: "cancelled", error: "No hay horario para avisar." }
+
+  let link = ""
+  if (row.kind === "deposit_request" && booking) {
+    if (!deps.payments) return { status: "failed", error: "Mercado Pago no está configurado." }
+    link = await ensurePaymentLink(scoped, booking, deps.payments, now)
+  }
+
   const [business, service, resource] = await Promise.all([
     scoped.business(),
-    scoped.services.findById(booking.serviceId),
-    scoped.resources.findById(booking.resourceId),
+    scoped.services.findById(subject.serviceId),
+    scoped.resources.findById(subject.resourceId),
   ])
   const tz = business?.timezone ?? "UTC"
-  const data = {
+  const data: MessageData = {
     name: firstName(customer.name),
     service: service?.name ?? "tu turno",
     staff: resource?.name ?? "el equipo",
-    day: formatZoned(booking.startsAt, tz, "EEEE d 'de' MMMM"),
-    time: toTimeString(booking.startsAt, tz),
+    day: formatZoned(subject.startsAt, tz, "EEEE d 'de' MMMM"),
+    time: toTimeString(subject.startsAt, tz),
     address: business?.address || business?.name || "el local",
+    deposit: booking ? formatMoney(booking.depositAmount, booking.currency) : "",
+    link,
+    holdUntil: booking?.holdExpiresAt ? toTimeString(booking.holdExpiresAt, tz) : "",
   }
   const template = messageFor(row.kind)
   if (!template) return { status: "cancelled", error: "Tipo de mensaje que todavía no se manda." }
   const params = paramsFor(template, data)
   const body = fillTemplate(template, params)
   const buttons =
-    row.kind === "reminder_24h"
+    row.kind === "reminder_24h" && booking
       ? reminderButtons.map((b) => ({ id: reminderButtonId(b.action, booking.id), title: b.title }))
-      : []
+      : row.kind === "waitlist_offer" && entry
+        ? [{ id: waitlistButtonId(entry.id), title: "Lo quiero" }]
+        : []
 
   const { conversation } = await findOrCreateConversation(scoped, customer.phoneE164, customer.name)
   const windowOpen = isWindowOpen(conversation.lastInboundAt, now)
@@ -167,7 +248,7 @@ async function sendOne(
   if (!windowOpen) await addUsage(scoped, usagePeriod(now, tz), { templatesSent: 1 })
 
   // "Cliente no confirmó a 2 horas del turno": se le pidió confirmar y no contestó.
-  if (row.kind === "reminder_2h" && booking.status === "confirmed") {
+  if (row.kind === "reminder_2h" && booking && booking.status === "confirmed") {
     const asked = await scoped.scheduledMessages.findFirst(
       and(
         eq(schema.scheduledMessages.bookingId, booking.id),

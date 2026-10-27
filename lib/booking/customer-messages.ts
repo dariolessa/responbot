@@ -7,7 +7,8 @@ import type { BookingPayload } from "@/lib/notifications/types"
 import { formatZoned, toDateString, toTimeString } from "@/lib/time"
 
 import type { Actor } from "./create"
-import { isOpen } from "./policies"
+import { isOpen, occupyingStatuses } from "./policies"
+import { offerFreedSlot } from "./waitlist"
 
 /*
  * Lo que dispara un cambio de turno (docs/SPEC.md, "Estados del turno": cada
@@ -27,7 +28,12 @@ type ReminderKind = (typeof reminderKinds)[number]
 
 export type BookingChange =
   | { kind: "created" }
-  | { kind: "moved"; previousStartsAt: Date }
+  | {
+      kind: "moved"
+      previousStartsAt: Date
+      /** Lugar que dejó libre (para la lista de espera). */
+      previous?: { resourceId: string; startsAt: Date; endsAt: Date }
+    }
   | { kind: "status"; from: schema.Booking["status"] }
 
 /** Datos del turno para los avisos, ya en la zona del negocio. */
@@ -106,8 +112,10 @@ export async function syncReminders(scoped: ScopedDb, booking: schema.Booking, n
   }
 }
 
-async function queueNow(scoped: ScopedDb, booking: schema.Booking, kind: "booking_confirmation" | "booking_cancelled", now: Date) {
-  await cancelPending(scoped, booking.id, ["booking_confirmation", "booking_cancelled"])
+const immediateKinds = ["booking_confirmation", "booking_cancelled", "deposit_request", "hold_expired"] as const
+
+async function queueNow(scoped: ScopedDb, booking: schema.Booking, kind: (typeof immediateKinds)[number], now: Date) {
+  await cancelPending(scoped, booking.id, [...immediateKinds])
   await scoped.scheduledMessages.insert({ bookingId: booking.id, customerId: booking.customerId, kind, sendAt: now })
 }
 
@@ -118,6 +126,18 @@ export async function onBookingChange(
   actor: Actor,
   now: Date = new Date(),
 ) {
+  // Lugar liberado (también por un turno del chat de prueba): se ofrece a la lista de espera de ese día.
+  const occupying = (status: schema.Booking["status"]) => (occupyingStatuses as readonly string[]).includes(status)
+  if (change.kind === "status" && occupying(change.from) && !occupying(booking.status)) {
+    await offerFreedSlot(
+      scoped,
+      { bookingId: booking.id, resourceId: booking.resourceId, startsAt: booking.startsAt, endsAt: booking.endsAt },
+      now,
+    )
+  } else if (change.kind === "moved" && change.previous) {
+    await offerFreedSlot(scoped, { bookingId: booking.id, ...change.previous }, now)
+  }
+
   const customer = await scoped.customers.findById(booking.customerId)
   if (!customer || customer.isTest || booking.source === "test_chat") return
   const business = await scoped.business()
@@ -126,10 +146,18 @@ export async function onBookingChange(
   await syncReminders(scoped, booking, now)
 
   // Al cliente: si el cambio lo hizo el equipo desde el panel. Si fue por WhatsApp, el bot ya se lo dijo.
+  // La seña (link de pago, pago recibido y retención vencida) se avisa siempre.
   const byTeam = actor.type === "user"
-  if (byTeam && booking.startsAt > now) {
-    if (change.kind === "created" || change.kind === "moved") await queueNow(scoped, booking, "booking_confirmation", now)
-    else if (booking.status === "cancelled") await queueNow(scoped, booking, "booking_cancelled", now)
+  const upcoming = booking.startsAt > now
+  const held = booking.status === "pending_payment"
+  const paid = change.kind === "status" && change.from === "pending_payment" && booking.status === "confirmed"
+  if (upcoming) {
+    if (change.kind === "created" && held) await queueNow(scoped, booking, "deposit_request", now)
+    else if (paid) await queueNow(scoped, booking, "booking_confirmation", now)
+    else if (booking.status === "expired" && change.kind === "status") await queueNow(scoped, booking, "hold_expired", now)
+    else if (byTeam && (change.kind === "created" || change.kind === "moved") && !held) {
+      await queueNow(scoped, booking, "booking_confirmation", now)
+    } else if (byTeam && booking.status === "cancelled") await queueNow(scoped, booking, "booking_cancelled", now)
   }
 
   // Al equipo.
@@ -143,7 +171,11 @@ export async function onBookingChange(
     await notify(scoped, {
       ...base,
       type: "booking.created",
-      payload: { ...(await bookingPayload(scoped, booking, business.timezone)), byBot: actor.type === "bot" },
+      payload: {
+        ...(await bookingPayload(scoped, booking, business.timezone)),
+        byBot: actor.type === "bot",
+        awaitingDeposit: held,
+      },
     })
   } else if (change.kind === "moved") {
     await notify(scoped, {

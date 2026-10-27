@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, isNull, lte, sql, type SQL } from "drizzle-orm"
+import { and, eq, gt, inArray, isNull, lt, lte, sql, type SQL } from "drizzle-orm"
 import type {
   PgColumn,
   PgDatabase,
@@ -528,7 +528,34 @@ export function forPlatform(db: AnyDb) {
             sql`exists (select 1 from jsonb_each_text(${schema.notifications.sentStatus}) s where s.value = 'pending')`,
           ),
         )
-      return [...new Set([...due, ...pending].map((r) => r.id))]
+      const refunds = await db
+        .selectDistinct({ id: schema.payments.businessId })
+        .from(schema.payments)
+        .where(eq(schema.payments.refundStatus, "pending"))
+      return [...new Set([...due, ...pending, ...refunds].map((r) => r.id))]
+    },
+
+    /** Mercado Pago avisa con el user_id del vendedor: identifica al negocio. */
+    async mpAccountByUserId(mpUserId: string) {
+      const [row] = await db.select().from(schema.mpAccounts).where(eq(schema.mpAccounts.mpUserId, mpUserId)).limit(1)
+      return row
+    },
+
+    /** Cuentas de Mercado Pago activas cuyo token vence antes de `before` (cron de tokens). */
+    mpAccountsExpiringBefore(before: Date) {
+      return db
+        .select({ id: schema.mpAccounts.id, businessId: schema.mpAccounts.businessId })
+        .from(schema.mpAccounts)
+        .where(and(eq(schema.mpAccounts.status, "active"), lt(schema.mpAccounts.expiresAt, before)))
+    },
+
+    /** Negocios con turnos retenidos cuya seña venció (cron expire-holds), o con lista de espera de días pasados. */
+    async businessesWithExpiredHolds(now: Date): Promise<string[]> {
+      const rows = await db
+        .selectDistinct({ id: schema.bookings.businessId })
+        .from(schema.bookings)
+        .where(and(eq(schema.bookings.status, "pending_payment"), lte(schema.bookings.holdExpiresAt, now)))
+      return rows.map((r) => r.id)
     },
 
     /** Resend avisó un rebote o una queja: no se le mandan más correos de avisos a esa dirección. */
