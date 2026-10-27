@@ -4,6 +4,7 @@ import {
   Bot,
   CalendarDays,
   CreditCard,
+  LifeBuoy,
   LayoutGrid,
   MessagesSquare,
   Scissors,
@@ -38,4 +39,5 @@ export const navItems: NavItem[] = [
   { href: "/app/notificaciones", label: "Notificaciones", icon: Bell },
   { href: "/app/configuracion", label: "Configuración", icon: Settings },
   { href: "/app/facturacion", label: "Facturación", icon: CreditCard, permission: "manageBilling" },
+  { href: "/app/ayuda", label: "Ayuda", icon: LifeBuoy },
 ]
