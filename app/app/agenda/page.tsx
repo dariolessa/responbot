@@ -1,4 +1,4 @@
-import { and, gt, inArray, isNull, lt, notInArray, or } from "drizzle-orm"
+import { and, eq, gt, inArray, isNull, lt, notInArray, or } from "drizzle-orm"
 import type { Metadata } from "next"
 
 import { AgendaView } from "@/components/agenda/agenda-view"
@@ -9,6 +9,7 @@ import { agendaAccess, bookingsVisibleWhere } from "@/lib/booking/access"
 import { resourceColor } from "@/lib/colors"
 import * as schema from "@/lib/db/schema"
 import { formatMoney } from "@/lib/money"
+import { depositFor } from "@/lib/payments/deposits"
 import { formatPhone } from "@/lib/phone"
 import {
   addDaysToDate,
@@ -46,12 +47,13 @@ export default async function AgendaPage({ searchParams }: PageProps<"/app/agend
   const rangeStart = dayRange(from, timezone).start
   const rangeEnd = dayRange(to, timezone).end
 
-  const [allResources, rules, services, links, hours] = await Promise.all([
+  const [allResources, rules, services, links, hours, mpAccount] = await Promise.all([
     db.resources.findMany({ orderBy: [schema.resources.createdAt] }),
     db.bookingRules.findFirst(),
     db.services.findMany({ orderBy: [schema.services.sortOrder, schema.services.name] }),
     db.resourceServices.findMany(),
     db.workingHours.findMany(),
+    db.mpAccounts.findFirst(eq(schema.mpAccounts.status, "active")),
   ])
   const colorIndex = new Map(allResources.map((r, i) => [r.id, i]))
   const visibleResources = allResources.filter(
@@ -161,6 +163,7 @@ export default async function AgendaPage({ searchParams }: PageProps<"/app/agend
         startsAt: b.startsAt.toISOString(),
         price: formatMoney(b.price, b.currency),
         depositStatus: b.depositStatus,
+        deposit: b.depositAmount > 0 ? formatMoney(b.depositAmount, b.currency) : null,
         source: b.source,
         cancelReason: b.cancelReason,
       }
@@ -185,6 +188,10 @@ export default async function AgendaPage({ searchParams }: PageProps<"/app/agend
         name: s.name,
         durationMinutes: s.durationMinutes,
         price: formatMoney(s.price, business.currency),
+        deposit: (() => {
+          const amount = mpAccount ? depositFor({ rules, price: s.price, depositOverride: s.depositOverride }) : 0
+          return amount > 0 ? formatMoney(amount, business.currency) : null
+        })(),
       })),
   }
 

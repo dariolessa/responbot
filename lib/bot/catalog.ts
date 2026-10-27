@@ -24,6 +24,8 @@ export type CatalogService = {
   durationMinutes: number
   price: number
   priceLabel: string
+  /** Seña propia del servicio en centésimos (0 = sin seña), o null si rige la general. */
+  depositOverride: number | null
   staff: { id: string; name: string; durationMinutes: number; price: number; priceLabel: string }[]
 }
 
@@ -67,6 +69,7 @@ export async function loadCatalog(scoped: ScopedDb, currency: string): Promise<C
       durationMinutes: s.durationMinutes,
       price: s.price,
       priceLabel: formatMoney(s.price, currency),
+      depositOverride: s.depositOverride,
       staff: links
         .filter((l) => l.serviceId === s.id && activeStaff.has(l.resourceId))
         .map((l) => {

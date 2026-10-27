@@ -12,8 +12,10 @@ import {
   bufferOptions,
   cancelHoursOptions,
   firstReminderOptions,
+  holdMinutesOptions,
   maxDaysAheadOptions,
   minNoticeOptions,
+  noShowDepositOptions,
   secondReminderOptions,
   slotStepOptions,
   type RulesFormValues,
@@ -30,10 +32,13 @@ export function RulesForm({
   initial,
   currency,
   mode,
+  mercadoPagoConnected = false,
 }: {
   initial: RulesFormValues
   currency: string
   mode: "onboarding" | "settings"
+  /** Sin Mercado Pago conectado las señas no se cobran: se avisa. */
+  mercadoPagoConnected?: boolean
 }) {
   const [values, setValues] = useState<RulesFormValues>(initial)
   const [error, setError] = useState<string | null>(null)
@@ -69,7 +74,9 @@ export function RulesForm({
       | "slotStepMinutes"
       | "cancelHours"
       | "reminderFirstHours"
-      | "reminderSecondHours",
+      | "reminderSecondHours"
+      | "holdMinutes"
+      | "noShowDepositThreshold",
     options: { value: number; label: string }[],
   ) => (
     <NativeSelect
@@ -190,10 +197,31 @@ export function RulesForm({
           </Field>
         ) : null}
         {values.depositMode !== "none" ? (
+          <div className="grid gap-6 sm:grid-cols-2">
+            <Field
+              label="Tiempo para pagar"
+              htmlFor="holdMinutes"
+              hint="El turno queda guardado esperando la seña; si no llega, se libera."
+              error={fieldErrors.holdMinutes}
+            >
+              {select("holdMinutes", holdMinutesOptions)}
+            </Field>
+            <Field
+              label="Seña obligatoria por inasistencias"
+              htmlFor="noShowDepositThreshold"
+              hint="Aunque el servicio no pida seña."
+              error={fieldErrors.noShowDepositThreshold}
+            >
+              {select("noShowDepositThreshold", noShowDepositOptions)}
+            </Field>
+          </div>
+        ) : null}
+        {values.depositMode !== "none" && !mercadoPagoConnected ? (
           <p className="flex gap-2 text-sm text-muted-foreground">
             <Info className="mt-0.5 size-4 shrink-0" />
-            Para cobrar señas vas a conectar Mercado Pago, que llega muy pronto. Mientras tanto, los
-            turnos que cargás desde el panel se confirman sin seña.
+            {mode === "onboarding"
+              ? "Para cobrar señas, conectá Mercado Pago desde Configuración. Mientras tanto, los turnos se confirman sin seña."
+              : "Para cobrar señas, conectá Mercado Pago en Conexiones, acá abajo. Mientras tanto, los turnos se confirman sin seña."}
           </p>
         ) : null}
       </fieldset>

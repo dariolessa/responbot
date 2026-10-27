@@ -13,6 +13,7 @@ import {
 import { Field, FormError } from "@/components/forms/field"
 import { ResponsiveSheet } from "@/components/layout/responsive-sheet"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { NativeSelect } from "@/components/ui/native-select"
 import { formatDate } from "@/lib/time"
@@ -94,12 +95,14 @@ function NewBookingForm({
   const [query, setQuery] = useState("")
   const [results, setResults] = useState<CustomerOption[]>([])
   const [customer, setCustomer] = useState<CustomerChoice>(null)
+  const [requestDeposit, setRequestDeposit] = useState(false)
 
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [saving, startSaving] = useTransition()
 
   const doers = resources.filter((r) => r.serviceIds.includes(serviceId))
+  const deposit = services.find((s) => s.id === serviceId)?.deposit ?? null
   const effectiveResource = doers.some((r) => r.id === resourceId) ? resourceId : ""
 
   // Horarios libres para la combinación elegida.
@@ -147,10 +150,15 @@ function NewBookingForm({
           customer.kind === "existing"
             ? { kind: "existing", id: customer.option.id }
             : { kind: "new", name: customer.name, phone: customer.phone },
+        requestDeposit: Boolean(deposit) && requestDeposit,
       })
       if (result.ok) {
         const who = customer.kind === "existing" ? customer.option.name ?? customer.option.phone : customer.name
-        onCreated(`Turno de ${who} reservado para el ${formatDate(date, "EEEE d")} a las ${time}.`)
+        onCreated(
+          deposit && requestDeposit
+            ? `Turno de ${who} guardado para el ${formatDate(date, "EEEE d")} a las ${time}, esperando la seña.`
+            : `Turno de ${who} reservado para el ${formatDate(date, "EEEE d")} a las ${time}.`,
+        )
       } else {
         setError(result.error)
         setFieldErrors(result.fieldErrors ?? {})
@@ -366,6 +374,22 @@ function NewBookingForm({
           </div>
         )}
       </div>
+
+      {deposit ? (
+        <label className="flex min-h-11 items-start gap-3 text-sm">
+          <Checkbox
+            className="mt-0.5"
+            checked={requestDeposit}
+            onChange={(e) => setRequestDeposit(e.target.checked)}
+          />
+          <span>
+            Pedir seña de <span className="font-mono">{deposit}</span> por Mercado Pago
+            <span className="block text-muted-foreground">
+              El cliente recibe el link por WhatsApp y el turno se confirma cuando paga.
+            </span>
+          </span>
+        </label>
+      ) : null}
 
       <FormError message={error} />
 

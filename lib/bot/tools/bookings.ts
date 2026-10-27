@@ -11,6 +11,7 @@ import { openStatuses } from "@/lib/booking/policies"
 import { findSlots, type Slot } from "@/lib/booking/slots"
 import * as schema from "@/lib/db/schema"
 import { formatMoney } from "@/lib/money"
+import { requestDepositRefund } from "@/lib/payments/mercadopago"
 import {
   addDaysToDate,
   formatZoned,
@@ -127,6 +128,15 @@ function bookingSummary(
     ends_at: toTimeString(booking.endsAt, ctx.business.timezone),
     price: formatMoney(booking.price, booking.currency),
     status: booking.status,
+    ...(booking.depositAmount > 0
+      ? {
+          deposit: formatMoney(booking.depositAmount, booking.currency),
+          deposit_status: booking.depositStatus,
+          ...(booking.status === "pending_payment" && booking.holdExpiresAt
+            ? { hold_until: toTimeString(booking.holdExpiresAt, ctx.business.timezone) }
+            : {}),
+        }
+      : {}),
   }
 }
 
@@ -235,16 +245,24 @@ export const createBookingTool = defineTool({
         serviceId: service.id,
         startsAt: slot.startsAt,
         source: bookingSource(ctx),
+        // El chat de prueba no cobra señas: no hay a quién mandarle el link.
+        requestDeposit: ctx.channel === "whatsapp",
       },
       botActor(ctx),
       { now: ctx.now },
     ).catch(translateBookingError)
 
     const names = await staffNames(ctx, [slot.resourceId])
-    return {
-      created: true,
-      ...bookingSummary(ctx, booking, { service: service.name, staff: names.get(slot.resourceId) }),
+    const summary = bookingSummary(ctx, booking, { service: service.name, staff: names.get(slot.resourceId) })
+    if (booking.status === "pending_payment") {
+      return {
+        created: true,
+        deposit_required: true,
+        ...summary,
+        hint: `El turno queda guardado hasta las ${summary.hold_until} esperando la seña de ${summary.deposit}; se confirma solo cuando se paga. El link de pago de Mercado Pago le llega en un mensaje aparte enseguida: decíselo, sin escribir ningún link vos.`,
+      }
     }
+    return { created: true, ...summary }
   },
 })
 
@@ -343,14 +361,22 @@ export const cancelBookingTool = defineTool({
       botActor(ctx),
       { now: ctx.now },
     ).catch(translateBookingError)
-    // El aviso a la lista de espera llega con las plantillas de WhatsApp (Fase 5).
+    // La lista de espera de ese día recibe la oferta del lugar (lib/booking/waitlist.ts).
+    const paid = booking.depositStatus === "paid"
+    const refund = paid && !late ? await requestDepositRefund(ctx.scoped, booking.id) : false
+    const deposit = formatMoney(booking.depositAmount, booking.currency)
     return {
       cancelled: true,
       booking_id: booking.id,
       late_cancellation: late,
-      hint: late
-        ? `Se canceló con menos de ${cancelHours} horas de anticipación: según la política, si hubo seña no se devuelve.`
-        : "Cancelado dentro del plazo de la política.",
+      deposit_refund: refund,
+      hint: !paid
+        ? late
+          ? `Se canceló con menos de ${cancelHours} horas de anticipación.`
+          : "Cancelado dentro del plazo de la política."
+        : refund
+          ? `Cancelado dentro del plazo: la seña de ${deposit} se le devuelve por Mercado Pago (puede tardar unos días según el medio de pago).`
+          : `Se canceló con menos de ${cancelHours} horas de anticipación: según la política, la seña de ${deposit} no se devuelve.`,
     }
   },
 })
@@ -387,6 +413,12 @@ export const joinWaitlist = defineTool({
         toTime: input.to_time ?? null,
       })
     }
-    return { added: !existing, already_waiting: Boolean(existing), service: service.name, date: input.date }
+    return {
+      added: !existing,
+      already_waiting: Boolean(existing),
+      service: service.name,
+      date: input.date,
+      hint: "Si se libera un lugar ese día, le llega un mensaje con un botón para tomarlo; es para quien conteste primero.",
+    }
   },
 })

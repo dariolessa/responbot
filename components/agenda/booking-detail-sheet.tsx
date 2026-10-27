@@ -1,18 +1,23 @@
 "use client"
 
-import { CalendarClock, Loader2, MessageCircle, Phone } from "lucide-react"
+import { CalendarClock, Copy, Loader2, MessageCircle, Phone, Send } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useState, useTransition } from "react"
 
 import {
   changeStatusAction,
   getBookingHistory,
+  getDepositInfo,
   moveBookingAction,
+  refundDepositAction,
+  resendPaymentLink,
   type BookingHistoryItem,
+  type DepositInfo,
 } from "@/app/app/agenda/actions"
 import { Field, FormError } from "@/components/forms/field"
 import { ResponsiveSheet } from "@/components/layout/responsive-sheet"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { NativeSelect } from "@/components/ui/native-select"
 import { isOpen, statusLabels, transitions, type BookingStatus } from "@/lib/booking/policies"
@@ -77,6 +82,7 @@ function BookingDetail({
   const [error, setError] = useState<string | null>(null)
   const [mode, setMode] = useState<"view" | "cancel" | "move">("view")
   const [reason, setReason] = useState("")
+  const [refundOnCancel, setRefundOnCancel] = useState(true)
   const [move, setMove] = useState({
     date: booking.date,
     time: minutesToTime(booking.startMin),
@@ -101,7 +107,12 @@ function BookingDetail({
   function setStatus(to: PanelTarget) {
     setError(null)
     startTransition(async () => {
-      const result = await changeStatusAction({ bookingId: booking.id, to, reason: reason || undefined })
+      const result = await changeStatusAction({
+        bookingId: booking.id,
+        to,
+        reason: reason || undefined,
+        refundDeposit: to === "cancelled" && booking.depositStatus === "paid" ? refundOnCancel : undefined,
+      })
       if (result.ok) {
         setMode("view")
         onChanged(`Turno marcado como "${statusLabels[to].toLowerCase()}".`)
@@ -138,7 +149,10 @@ function BookingDetail({
         <dt className="text-muted-foreground">Precio</dt>
         <dd className="font-mono">{booking.price}</dd>
         <dt className="text-muted-foreground">Seña</dt>
-        <dd>{depositLabels[booking.depositStatus]}</dd>
+        <dd>
+          {depositLabels[booking.depositStatus]}
+          {booking.deposit ? <span className="font-mono"> · {booking.deposit}</span> : null}
+        </dd>
         <dt className="text-muted-foreground">Reservado por</dt>
         <dd>{sourceLabels[booking.source]}</dd>
         {booking.cancelReason ? (
@@ -170,6 +184,14 @@ function BookingDetail({
           </>
         ) : null}
       </div>
+
+      {booking.deposit ? (
+        <DepositPanel
+          key={`${booking.status}-${booking.depositStatus}`}
+          bookingId={booking.id}
+          onChanged={onChanged}
+        />
+      ) : null}
 
       {mode === "view" && (open || allowed.length > 0) ? (
         <div className="grid gap-2">
@@ -214,6 +236,12 @@ function BookingDetail({
               autoFocus
             />
           </Field>
+          {booking.depositStatus === "paid" ? (
+            <label className="flex min-h-11 items-center gap-3 text-sm">
+              <Checkbox checked={refundOnCancel} onChange={(e) => setRefundOnCancel(e.target.checked)} />
+              Devolver la seña ({booking.deposit}) por Mercado Pago
+            </label>
+          ) : null}
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setMode("view")} disabled={pending}>
               Volver
@@ -312,3 +340,113 @@ function BookingDetail({
     </div>
   )
 }
+
+/** Seña del turno: link de pago mientras se espera, lo que resta cobrar y la devolución. */
+function DepositPanel({ bookingId, onChanged }: { bookingId: string; onChanged: (message: string) => void }) {
+  const [info, setInfo] = useState<DepositInfo | null | undefined>(undefined)
+  const [pending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    getDepositInfo({ bookingId }).then((result) => {
+      if (!cancelled) setInfo(result.ok ? result.data : null)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [bookingId])
+
+  if (info === undefined) return <div className="h-16 animate-pulse rounded-lg bg-muted" />
+  if (info === null) return null
+
+  function resend() {
+    setError(null)
+    startTransition(async () => {
+      const result = await resendPaymentLink({ bookingId })
+      if (result.ok) {
+        if (result.data.url) setInfo((i) => (i ? { ...i, paymentUrl: result.data.url } : i))
+        onChanged("Le mandamos el link de la seña por WhatsApp.")
+      } else setError(result.error)
+    })
+  }
+
+  function refund() {
+    if (!info) return
+    const warning = info.refundByPolicy
+      ? `¿Devolver la seña de ${info.amount}?`
+      : `Según tu política de cancelación no corresponde devolverla. ¿Devolver igual ${info.amount}?`
+    if (!window.confirm(warning)) return
+    setError(null)
+    startTransition(async () => {
+      const result = await refundDepositAction({ bookingId })
+      if (result.ok) {
+        setInfo((i) => (i ? { ...i, refund: "pending", refundError: null } : i))
+        onChanged("Estamos devolviendo la seña por Mercado Pago.")
+      } else setError(result.error)
+    })
+  }
+
+  async function copy() {
+    if (!info?.paymentUrl) return
+    try {
+      await navigator.clipboard.writeText(info.paymentUrl)
+      setCopied(true)
+    } catch {
+      setError("No se pudo copiar. Abrí el link y copialo desde ahí.")
+    }
+  }
+
+  const refundText = {
+    pending: "Devolución en curso.",
+    refunded: "Seña devuelta.",
+    failed: `No se pudo devolver${info.refundError ? `: ${info.refundError}` : "."}`,
+    none: null,
+  }[info.refund]
+
+  return (
+    <div className="grid gap-3 rounded-lg border p-4 text-sm">
+      {info.holdUntil ? (
+        <>
+          <p>
+            Esperando la seña de <span className="font-mono">{info.amount}</span>. El turno se guarda hasta las{" "}
+            <span className="font-mono">{info.holdUntil}</span>; si no llega, se libera solo.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" disabled={pending} onClick={resend}>
+              <Send />
+              Reenviar link
+            </Button>
+            {info.paymentUrl ? (
+              <Button variant="outline" size="sm" onClick={copy}>
+                <Copy />
+                {copied ? "Copiado" : "Copiar link"}
+              </Button>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+      {info.remaining && !info.cancelled ? (
+        <p>
+          Seña pagada. Al cobrar en el local, restan <span className="font-mono">{info.remaining}</span>.
+        </p>
+      ) : null}
+      {info.remaining && info.cancelled && info.refund === "none" ? (
+        <p className="text-muted-foreground">
+          {info.refundByPolicy
+            ? "El turno se canceló a tiempo: según tu política, la seña se devuelve."
+            : "El turno se canceló fuera de plazo: según tu política, la seña no se devuelve."}
+        </p>
+      ) : null}
+      {refundText ? <p className={info.refund === "failed" ? "text-destructive" : "text-muted-foreground"}>{refundText}</p> : null}
+      {info.canRefund && info.cancelled && info.remaining !== null && (info.refund === "none" || info.refund === "failed") ? (
+        <Button variant="outline" size="sm" className="justify-self-start" disabled={pending} onClick={refund}>
+          {info.refund === "failed" ? "Reintentar devolución" : "Devolver seña"}
+        </Button>
+      ) : null}
+      <FormError message={error} />
+    </div>
+  )
+}
+

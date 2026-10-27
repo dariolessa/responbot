@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm"
 
 import { handleIncomingMessage, type HandleMessageInput } from "@/lib/bot/engine"
+import { acceptWaitlistOffer, parseWaitlistButton } from "@/lib/booking/waitlist"
 import * as schema from "@/lib/db/schema"
 import { forBusiness, forPlatform, type AnyDb, type ScopedDb } from "@/lib/db/scoped"
 import type { BotModel, ImageDescriber } from "@/lib/integrations/anthropic/types"
@@ -184,6 +185,11 @@ async function prepare(
 
     case "choice": {
       const text = choiceText(content)
+      const offer = parseWaitlistButton(content.id)
+      if (offer) {
+        const reply = await acceptWaitlistOffer(scoped, customer, offer.entryId, content.title, now)
+        return { ...reply, stored: { type: "interactive", body: content.title } }
+      }
       const button = parseReminderButton(content.id)
       if (button) {
         const reply = await reminderReply(scoped, customer, button, content.title, now)
@@ -194,6 +200,11 @@ async function prepare(
     }
 
     case "template_button": {
+      const offer = parseWaitlistButton(content.payload)
+      if (offer) {
+        const reply = await acceptWaitlistOffer(scoped, customer, offer.entryId, content.text, now)
+        return { ...reply, stored: { type: "interactive", body: content.text } }
+      }
       const button = parseReminderButton(content.payload)
       if (button) {
         const reply = await reminderReply(scoped, customer, button, content.text, now)

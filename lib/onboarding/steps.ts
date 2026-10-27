@@ -70,8 +70,8 @@ export const steps: Step[] = [
     number: 6,
     title: "Conectar Mercado Pago",
     description: "Para cobrar señas.",
-    href: "/app/configuracion",
-    available: false,
+    href: "/app/configuracion#mercadopago",
+    available: true,
     optional: true,
   },
   {

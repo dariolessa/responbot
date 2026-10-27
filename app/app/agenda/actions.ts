@@ -22,7 +22,15 @@ import {
   type Actor,
 } from "@/lib/booking/create"
 import { findSlots } from "@/lib/booking/slots"
+import { formatMoney } from "@/lib/money"
 import { flushSoon } from "@/lib/notifications/deps"
+import { paymentDeps } from "@/lib/payments/deps"
+import {
+  depositPayment,
+  ensurePaymentLink,
+  refundAllowedByPolicy,
+  requestDepositRefund,
+} from "@/lib/payments/mercadopago"
 import * as schema from "@/lib/db/schema"
 import { dateInput, fail, invalid, ok, timeInput, type ActionResult } from "@/lib/forms"
 import { formatPhone, normalizePhone } from "@/lib/phone"
@@ -143,6 +151,8 @@ const createInput = z.object({
       phone: z.string().trim().min(6, { error: "Escribí el teléfono del cliente." }),
     }),
   ]),
+  /** Pedir la seña por Mercado Pago (el turno queda retenido hasta que se pague). */
+  requestDeposit: z.boolean().optional(),
 })
 
 export type CreateBookingInput = z.input<typeof createInput>
@@ -194,9 +204,10 @@ export async function createBookingAction(input: CreateBookingInput): Promise<Ac
   try {
     const booking = await createBooking(
       tenant.db,
-      { customerId, resourceId, serviceId, startsAt, source: "panel" },
+      { customerId, resourceId, serviceId, startsAt, source: "panel", requestDeposit: parsed.data.requestDeposit },
       actor,
     )
+    if (booking.status === "pending_payment") await tryPaymentLink(tenant, booking)
     done(tenant)
     return ok({ id: booking.id })
   } catch (error) {
@@ -220,6 +231,18 @@ const moveInput = z.object({
   time: timeInput,
   resourceId: z.uuid().optional(),
 })
+
+/** Crea el link enseguida para verlo en el panel; si falla, lo reintenta el mensaje al cliente. */
+async function tryPaymentLink(tenant: Tenant, booking: schema.Booking): Promise<string | null> {
+  const deps = paymentDeps()
+  if (!deps) return null
+  try {
+    return await ensurePaymentLink(tenant.db, booking, deps)
+  } catch (error) {
+    console.warn("[mercadopago] no se pudo crear el link", booking.id, error instanceof Error ? error.message : error)
+    return null
+  }
+}
 
 export async function moveBookingAction(input: z.input<typeof moveInput>): Promise<ActionResult> {
   const { tenant, access, actor, timezone } = await context()
@@ -251,6 +274,8 @@ const statusInput = z.object({
   bookingId: z.uuid(),
   to: z.enum(["confirmed", "client_confirmed", "completed", "no_show", "cancelled"]),
   reason: z.string().trim().max(200).optional(),
+  /** Al cancelar un turno con seña pagada: devolverla. */
+  refundDeposit: z.boolean().optional(),
 })
 
 export async function changeStatusAction(input: z.input<typeof statusInput>): Promise<ActionResult> {
@@ -265,11 +290,118 @@ export async function changeStatusAction(input: z.input<typeof statusInput>): Pr
       { bookingId: booking.id, to: parsed.data.to, cancelReason: parsed.data.reason },
       actor,
     )
+    if (parsed.data.to === "cancelled" && parsed.data.refundDeposit && can(tenant.role, "manageBusinessSettings")) {
+      await requestDepositRefund(tenant.db, booking.id)
+    }
     done(tenant)
     return ok()
   } catch (error) {
     return bookingFailure(error)
   }
+}
+
+// ---------------------------------------------------------------------------
+// Seña: link de pago y devolución
+// ---------------------------------------------------------------------------
+
+export type DepositInfo = {
+  amount: string
+  /** Lo que falta cobrar en el local (precio menos la seña pagada). */
+  remaining: string | null
+  paymentUrl: string | null
+  /** Hora local hasta la que se guarda el turno esperando la seña. */
+  holdUntil: string | null
+  refund: "none" | "pending" | "refunded" | "failed"
+  refundError: string | null
+  /** La política permite devolverla (canceló el negocio, o el cliente con anticipación). */
+  refundByPolicy: boolean
+  /** Quien mira puede devolver señas (dueño o admin). */
+  canRefund: boolean
+  cancelled: boolean
+}
+
+export async function getDepositInfo(input: { bookingId: string }): Promise<ActionResult<DepositInfo | null>> {
+  const { tenant, access, timezone } = await context()
+  const bookingId = z.uuid().parse(input.bookingId)
+  const booking = await visibleBooking(tenant, access, bookingId)
+  if (!booking) return fail("No encontramos el turno.")
+  if (booking.depositAmount <= 0) return ok(null)
+
+  const [payment, rules, cancelEvent] = await Promise.all([
+    depositPayment(tenant.db, booking.id),
+    tenant.db.bookingRules.findFirst(),
+    booking.status === "cancelled"
+      ? tenant.db.bookingEvents.findFirst(
+          and(eq(schema.bookingEvents.bookingId, booking.id), eq(schema.bookingEvents.toStatus, "cancelled")),
+          desc(schema.bookingEvents.createdAt),
+        )
+      : Promise.resolve(undefined),
+  ])
+  const paid = booking.depositStatus === "paid"
+  return ok({
+    amount: formatMoney(booking.depositAmount, booking.currency),
+    remaining: paid ? formatMoney(Math.max(0, booking.price - booking.depositAmount), booking.currency) : null,
+    paymentUrl: booking.status === "pending_payment" ? booking.paymentUrl : null,
+    holdUntil:
+      booking.status === "pending_payment" && booking.holdExpiresAt
+        ? formatZoned(booking.holdExpiresAt, timezone, "HH:mm")
+        : null,
+    refund: booking.depositStatus === "refunded" ? "refunded" : (payment?.refundStatus ?? "none"),
+    refundError: payment?.refundStatus === "failed" ? payment.refundError : null,
+    refundByPolicy: refundAllowedByPolicy({
+      booking,
+      cancelledBy: cancelEvent?.actorType ?? null,
+      cancelledAt: cancelEvent?.createdAt ?? null,
+      cancelHours: rules?.cancelHours ?? 0,
+    }),
+    canRefund: can(tenant.role, "manageBusinessSettings"),
+    cancelled: booking.status === "cancelled",
+  })
+}
+
+/** Vuelve a mandar el link de la seña por WhatsApp (y lo devuelve para copiarlo). */
+export async function resendPaymentLink(input: { bookingId: string }): Promise<ActionResult<{ url: string | null }>> {
+  const { tenant, access } = await context()
+  const booking = await visibleBooking(tenant, access, z.uuid().parse(input.bookingId))
+  if (!booking) return fail("No encontramos el turno.")
+  if (booking.status !== "pending_payment") return fail("Ese turno ya no espera la seña.")
+  const url = await tryPaymentLink(tenant, booking)
+  await tenant.db.scheduledMessages.update(
+    and(
+      eq(schema.scheduledMessages.bookingId, booking.id),
+      eq(schema.scheduledMessages.kind, "deposit_request"),
+      eq(schema.scheduledMessages.status, "pending"),
+    ),
+    { status: "cancelled", lastError: "Se volvió a mandar." },
+  )
+  await tenant.db.scheduledMessages.insert({
+    bookingId: booking.id,
+    customerId: booking.customerId,
+    kind: "deposit_request",
+    sendAt: new Date(),
+  })
+  done(tenant)
+  return ok({ url })
+}
+
+export async function refundDepositAction(input: { bookingId: string }): Promise<ActionResult> {
+  const { tenant, access } = await context()
+  if (!can(tenant.role, "manageBusinessSettings")) return fail("Solo el dueño o un admin devuelven señas.")
+  const booking = await visibleBooking(tenant, access, z.uuid().parse(input.bookingId))
+  if (!booking) return fail("No encontramos el turno.")
+  if (booking.status !== "cancelled") return fail("Primero cancelá el turno.")
+  if (!(await requestDepositRefund(tenant.db, booking.id))) {
+    return fail("Esa seña no está pagada o ya se está devolviendo.")
+  }
+  await tenant.db.auditLogs.insert({
+    actorId: tenant.user.id,
+    action: "deposit.refund_requested",
+    targetType: "booking",
+    targetId: booking.id,
+    metadata: { amount: booking.depositAmount, currency: booking.currency },
+  })
+  done(tenant)
+  return ok()
 }
 
 export type BookingHistoryItem = {

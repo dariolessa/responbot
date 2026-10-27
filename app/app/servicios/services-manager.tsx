@@ -284,7 +284,7 @@ export function ServicesManager({
             <Field
               label={`Seña propia (${currency}, opcional)`}
               htmlFor="service-deposit"
-              hint="Si la dejás vacía, se usa la seña general del negocio."
+              hint="Si la dejás vacía, se usa la seña general del negocio. Con 0, este servicio no lleva seña."
               error={fieldErrors.depositOverride}
             >
               <Input

@@ -647,7 +647,12 @@ describe("bandeja del panel", () => {
 
   it("una profesional solo configura los avisos de sus turnos", async () => {
     const prefs = await loadPrefs(salon.scoped, staffUser.userId, "staff")
-    expect(Object.keys(prefs.types).sort()).toEqual(["booking.changed", "booking.created", "booking.unconfirmed"])
+    expect(Object.keys(prefs.types).sort()).toEqual([
+      "booking.changed",
+      "booking.created",
+      "booking.unconfirmed",
+      "deposit.paid",
+    ])
     expect(prefs.types["booking.created"]).toEqual({ in_app: true, push: true, whatsapp: false, email: false })
     const owner = await loadPrefs(salon.scoped, salon.owner.id, "owner")
     expect(owner.types["booking.created"]!.whatsapp).toBe(true)

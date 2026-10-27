@@ -6,9 +6,11 @@ import { publicAppUrl } from "@/lib/app-url"
 import { db } from "@/lib/db"
 import { forBusiness, type AnyDb } from "@/lib/db/scoped"
 import { sendEmail } from "@/lib/integrations/resend/client"
+import { paymentDeps } from "@/lib/payments/deps"
+import { processPendingRefunds } from "@/lib/payments/mercadopago"
 import { webPushSender } from "@/lib/integrations/webpush/client"
 import { apiFor } from "@/lib/whatsapp/deps"
-import { sendDueCustomerMessages } from "@/lib/whatsapp/scheduled"
+import { sendDueCustomerMessages, type ScheduledDeps } from "@/lib/whatsapp/scheduled"
 
 import { deliverPendingNotifications, type DeliveryDeps } from "./dispatch"
 
@@ -18,8 +20,9 @@ import { deliverPendingNotifications, type DeliveryDeps } from "./dispatch"
  * no pasan por acá.
  */
 
-export function deliveryDeps(): DeliveryDeps {
+export function deliveryDeps(): DeliveryDeps & ScheduledDeps {
   return {
+    payments: paymentDeps(),
     push: webPushSender(),
     email: { send: (input) => sendEmail(input) },
     whatsapp: apiFor,
@@ -27,11 +30,18 @@ export function deliveryDeps(): DeliveryDeps {
   }
 }
 
-export async function flushBusiness(database: AnyDb, businessId: string, deps = deliveryDeps(), now = new Date()) {
+export async function flushBusiness(
+  database: AnyDb,
+  businessId: string,
+  deps: DeliveryDeps & ScheduledDeps = deliveryDeps(),
+  now = new Date(),
+) {
   const scoped = forBusiness(database, businessId)
+  // Primero las devoluciones de seña: dejan el aviso al cliente para mandar en esta misma vuelta.
+  const refunds = await processPendingRefunds(scoped, deps.payments ?? null, now)
   const messages = await sendDueCustomerMessages(scoped, deps, now)
   const notifications = await deliverPendingNotifications(scoped, deps, now)
-  return { messages, notifications }
+  return { refunds, messages, notifications }
 }
 
 /** Después de responder (after → waitUntil en Vercel): manda lo que dejó pendiente una acción. */

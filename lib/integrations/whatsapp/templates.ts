@@ -61,6 +61,42 @@ export const templateDefinitions: TemplateDefinition[] = [
     buttons: ["Lo quiero"],
   },
   {
+    name: "sena_pendiente",
+    category: "UTILITY",
+    label: "Link de pago de la seña",
+    body: "Hola {{1}}, te guardamos el turno de {{2}} del {{3}} a las {{4}}. Para confirmarlo, pagá la seña de {{5}} acá: {{6}} . El lugar queda reservado hasta las {{7}}.",
+    example: [
+      "Lucía",
+      "Corte",
+      "martes 3 de noviembre",
+      "10:30",
+      "$ 300",
+      "https://www.mercadopago.com.uy/checkout/v1/redirect?pref_id=123",
+      "18:15",
+    ],
+  },
+  {
+    name: "retencion_vencida",
+    category: "UTILITY",
+    label: "Turno liberado por seña sin pagar",
+    body: "Hola {{1}}, como no llegó la seña, se liberó el turno de {{2}} del {{3}} a las {{4}}. Si querés reservar otro horario, respondé este mensaje.",
+    example: ["Lucía", "Corte", "martes 3 de noviembre", "10:30"],
+  },
+  {
+    name: "sena_devuelta",
+    category: "UTILITY",
+    label: "Seña devuelta",
+    body: "Hola {{1}}, te devolvimos la seña de {{2}} del turno de {{3}} del {{4}}. Según tu medio de pago, puede tardar unos días en verse.",
+    example: ["Lucía", "$ 300", "Corte", "martes 3 de noviembre"],
+  },
+  {
+    name: "lugar_tomado",
+    category: "UTILITY",
+    label: "Lugar ya tomado (lista de espera)",
+    body: "Hola {{1}}, el lugar para {{2}} del {{3}} a las {{4}} ya lo tomó otra persona. Seguís en la lista de espera y te avisamos si se libera otro.",
+    example: ["Lucía", "Corte", "martes 3 de noviembre", "10:30"],
+  },
+  {
     name: "reactivacion_cliente",
     category: "MARKETING",
     label: "Invitación a volver",
@@ -104,6 +140,10 @@ export type TemplateName =
   | "confirmacion_turno"
   | "turno_cancelado"
   | "lugar_liberado"
+  | "sena_pendiente"
+  | "retencion_vencida"
+  | "sena_devuelta"
+  | "lugar_tomado"
   | "reactivacion_cliente"
   | "resumen_diario_dueno"
   | "aviso_derivacion_dueno"

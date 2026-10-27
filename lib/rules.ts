@@ -71,6 +71,22 @@ export const secondReminderOptions = [
   { value: 4, label: "4 horas antes" },
 ]
 
+export const holdMinutesOptions = [
+  { value: 10, label: "10 minutos" },
+  { value: 15, label: "15 minutos" },
+  { value: 30, label: "30 minutos" },
+  { value: 60, label: "1 hora" },
+  { value: 120, label: "2 horas" },
+]
+
+/** 0 = nunca (en la base queda nulo). */
+export const noShowDepositOptions = [
+  { value: 0, label: "Nunca" },
+  { value: 1, label: "Desde 1 inasistencia" },
+  { value: 2, label: "Desde 2 inasistencias" },
+  { value: 3, label: "Desde 3 inasistencias" },
+]
+
 const oneOf = (options: { value: number }[], message: string) =>
   z.coerce.number().refine((v) => options.some((o) => o.value === v), { error: message })
 
@@ -85,6 +101,8 @@ export const rulesInput = z
     reminderSecondHours: oneOf(secondReminderOptions, "Elegí cuándo va el segundo recordatorio."),
     depositMode: z.enum(["none", "fixed", "percent"]),
     depositValue: z.string().trim().optional(),
+    holdMinutes: oneOf(holdMinutesOptions, "Elegí cuánto se guarda el turno esperando la seña."),
+    noShowDepositThreshold: oneOf(noShowDepositOptions, "Elegí desde cuántas inasistencias se pide seña."),
   })
   .transform((v, ctx) => {
     let depositValue = 0
@@ -112,6 +130,8 @@ export const rulesInput = z
       depositValue,
       reminderFirstHours: v.reminderFirstHours || null,
       reminderSecondHours: v.reminderSecondHours || null,
+      // Pedir seña por inasistencias usa la seña general: sin seña general no aplica.
+      noShowDepositThreshold: v.depositMode === "none" ? null : v.noShowDepositThreshold || null,
     }
   })
 
@@ -128,6 +148,8 @@ export function rulesToForm(rules: {
   depositValue: number
   reminderFirstHours: number | null
   reminderSecondHours: number | null
+  holdMinutes: number
+  noShowDepositThreshold: number | null
 }): RulesFormValues {
   return {
     minNoticeMinutes: rules.minNoticeMinutes,
@@ -137,6 +159,8 @@ export function rulesToForm(rules: {
     cancelHours: rules.cancelHours,
     reminderFirstHours: rules.reminderFirstHours ?? 0,
     reminderSecondHours: rules.reminderSecondHours ?? 0,
+    holdMinutes: holdMinutesOptions.some((o) => o.value === rules.holdMinutes) ? rules.holdMinutes : 15,
+    noShowDepositThreshold: rules.noShowDepositThreshold ?? 0,
     depositMode: rules.depositMode,
     depositValue:
       rules.depositMode === "fixed"
@@ -157,4 +181,6 @@ export const defaultRules = {
   depositValue: 0,
   reminderFirstHours: 24,
   reminderSecondHours: 2,
+  holdMinutes: 15,
+  noShowDepositThreshold: null,
 }

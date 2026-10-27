@@ -29,6 +29,8 @@ export type AgendaBooking = {
   startsAt: string
   price: string
   depositStatus: "none" | "pending" | "paid" | "refunded"
+  /** Monto de la seña ya formateado, o null si no lleva. */
+  deposit: string | null
   source: "whatsapp" | "panel" | "test_chat"
   cancelReason: string | null
 }
@@ -42,7 +44,14 @@ export type AgendaTimeOff = {
   label: string
 }
 
-export type AgendaService = { id: string; name: string; durationMinutes: number; price: string }
+export type AgendaService = {
+  id: string
+  name: string
+  durationMinutes: number
+  price: string
+  /** Seña que lleva el servicio (si Mercado Pago está conectado), o null. */
+  deposit: string | null
+}
 
 export type AgendaData = {
   view: AgendaView

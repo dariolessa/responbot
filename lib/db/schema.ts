@@ -109,6 +109,10 @@ export const scheduledKindEnum = pgEnum("scheduled_kind", [
   "post_service",
   "booking_confirmation",
   "booking_cancelled",
+  "deposit_request",
+  "hold_expired",
+  "deposit_refunded",
+  "waitlist_taken",
 ])
 export const scheduledStatusEnum = pgEnum("scheduled_status", [
   "pending",
@@ -272,6 +276,8 @@ export const bookingRules = pgTable(
     reminderFirstHours: integer("reminder_first_hours").default(24),
     /** Horas antes del segundo recordatorio (corto, con la dirección); nulo = no se manda. */
     reminderSecondHours: integer("reminder_second_hours").default(2),
+    /** Inasistencias desde las que se pide la seña general aunque el servicio no la pida; nulo = nunca. */
+    noShowDepositThreshold: integer("no_show_deposit_threshold"),
     ...timestamps,
   },
   (t) => [
@@ -425,6 +431,9 @@ export const bookings = pgTable(
     depositStatus: depositStatusEnum("deposit_status").notNull().default("none"),
     source: bookingSourceEnum("source").notNull(),
     holdExpiresAt: timestamp("hold_expires_at", { withTimezone: true }),
+    /** Link de pago de la seña (init_point de Checkout Pro) y su preferencia en Mercado Pago. */
+    paymentUrl: text("payment_url"),
+    paymentPreferenceId: text("payment_preference_id"),
     cancelReason: text("cancel_reason"),
     ...timestamps,
   },
@@ -467,11 +476,16 @@ export const payments = pgTable(
     providerPaymentId: text("provider_payment_id").notNull(),
     amount: integer("amount").notNull(),
     currency: text("currency").notNull(),
+    /** Estado en Mercado Pago (approved, pending, rejected, refunded…). */
     status: text("status").notNull(),
+    /** Devolución de la seña: pending (pedida, se procesa enseguida), refunded o failed; nulo = no se pidió. */
+    refundStatus: text("refund_status").$type<"pending" | "refunded" | "failed">(),
+    refundedAmount: integer("refunded_amount").notNull().default(0),
+    refundError: text("refund_error"),
     raw: jsonb("raw"),
     ...timestamps,
   },
-  (t) => [uniqueIndex().on(t.provider, t.providerPaymentId), index().on(t.bookingId)],
+  (t) => [uniqueIndex().on(t.provider, t.providerPaymentId), index().on(t.bookingId), index().on(t.refundStatus)],
 )
 
 export const waitlistEntries = pgTable(
@@ -490,6 +504,13 @@ export const waitlistEntries = pgTable(
     fromTime: time("from_time"),
     toTime: time("to_time"),
     status: waitlistStatusEnum("status").notNull().default("waiting"),
+    /** Horario que se le ofreció cuando se liberó un lugar (status offered). */
+    offeredStartsAt: timestamp("offered_starts_at", { withTimezone: true }),
+    offeredResourceId: uuid("offered_resource_id").references(() => resources.id, { onDelete: "set null" }),
+    /** Turno que liberó el lugar: agrupa las ofertas del mismo horario ("ya fue tomado" al resto). */
+    offerSourceBookingId: uuid("offer_source_booking_id").references(() => bookings.id, { onDelete: "set null" }),
+    /** Turno que reservó desde la oferta. */
+    bookedBookingId: uuid("booked_booking_id").references(() => bookings.id, { onDelete: "set null" }),
     ...timestamps,
   },
   (t) => [index().on(t.businessId, t.date, t.status)],
@@ -518,7 +539,12 @@ export const whatsappAccounts = pgTable("whatsapp_accounts", {
 export const mpAccounts = pgTable("mp_accounts", {
   id: id(),
   businessId: businessRef().unique(),
-  mpUserId: text("mp_user_id").notNull(),
+  /** Usuario vendedor en Mercado Pago; llega como user_id en cada webhook. */
+  mpUserId: text("mp_user_id").notNull().unique(),
+  /** Email o apodo de la cuenta, para mostrar cuál está conectada. */
+  displayName: text("display_name"),
+  /** false = credenciales de prueba. */
+  liveMode: boolean("live_mode").notNull().default(true),
   accessTokenEnc: text("access_token_enc").notNull(),
   refreshTokenEnc: text("refresh_token_enc").notNull(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
@@ -611,6 +637,8 @@ export const scheduledMessages = pgTable(
       .notNull()
       .references(() => customers.id, { onDelete: "cascade" }),
     kind: scheduledKindEnum("kind").notNull(),
+    /** Lista de espera (ofertas de lugar liberado y "ya fue tomado"). */
+    waitlistEntryId: uuid("waitlist_entry_id").references(() => waitlistEntries.id, { onDelete: "cascade" }),
     sendAt: timestamp("send_at", { withTimezone: true }).notNull(),
     status: scheduledStatusEnum("status").notNull().default("pending"),
     attempts: integer("attempts").notNull().default(0),
@@ -737,3 +765,6 @@ export type WhatsAppAccount = typeof whatsappAccounts.$inferSelect
 export type ScheduledMessage = typeof scheduledMessages.$inferSelect
 export type Notification = typeof notifications.$inferSelect
 export type NotificationPrefs = typeof notificationPrefs.$inferSelect
+export type Payment = typeof payments.$inferSelect
+export type MpAccount = typeof mpAccounts.$inferSelect
+export type WaitlistEntry = typeof waitlistEntries.$inferSelect
