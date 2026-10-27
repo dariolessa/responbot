@@ -31,6 +31,8 @@ export type OutboundPayload =
   | { type: "text"; text: string }
   | { type: "interactive"; interactive: InteractivePayload }
   | { type: "template"; template: TemplatePayload }
+  /** Imagen por link público (WhatsApp la descarga); el epígrafe admite hasta 1024 caracteres. */
+  | { type: "image"; image: { link: string; caption?: string } }
 
 export type WhatsAppApi = {
   /** Envía un mensaje y devuelve su wamid. `to` en E.164 (con o sin "+"). */
@@ -65,6 +67,7 @@ export function cloudApi(
       }
       if (payload.type === "text") body.text = { body: payload.text, preview_url: false }
       else if (payload.type === "interactive") body.interactive = payload.interactive
+      else if (payload.type === "image") body.image = payload.image
       else body.template = payload.template
 
       const result = await graphRequest<{ messages?: { id: string }[] }>(

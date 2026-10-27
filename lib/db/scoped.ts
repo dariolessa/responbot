@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, isNull, lt, lte, sql, type SQL } from "drizzle-orm"
+import { and, eq, gt, inArray, isNull, lt, lte, or, sql, type SQL } from "drizzle-orm"
 import type {
   PgColumn,
   PgDatabase,
@@ -52,6 +52,8 @@ export const tenantTables = {
   notificationPrefs: schema.notificationPrefs,
   usageCounters: schema.usageCounters,
   auditLogs: schema.auditLogs,
+  catalogSources: schema.catalogSources,
+  catalogItems: schema.catalogItems,
 } as const
 
 type TenantTables = typeof tenantTables
@@ -496,6 +498,18 @@ export function forPlatform(db: AnyDb) {
         .select()
         .from(schema.whatsappAccounts)
         .where(eq(schema.whatsappAccounts.status, "active"))
+    },
+
+    /** Fuentes de catálogo que no se importan hace más de `olderThan` (cron diario de reimportación). */
+    catalogSourcesDue(olderThan: Date, limit: number) {
+      return db
+        .select({ id: schema.catalogSources.id, businessId: schema.catalogSources.businessId })
+        .from(schema.catalogSources)
+        .where(
+          or(isNull(schema.catalogSources.lastImportedAt), lt(schema.catalogSources.lastImportedAt, olderThan)),
+        )
+        .orderBy(schema.catalogSources.lastImportedAt)
+        .limit(limit)
     },
 
     /** Negocios con su zona horaria, para los crons que dependen de la hora local (resúmenes, correos de alta). */

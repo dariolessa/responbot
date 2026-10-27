@@ -10,6 +10,8 @@ export const permissions = {
   /** Tomar y responder conversaciones. */
   handleConversations: ["owner", "admin", "staff"],
   manageServices: ["owner", "admin"],
+  /** Catálogo aprendido desde la web (propiedades, productos). */
+  manageCatalog: ["owner", "admin"],
   manageTeam: ["owner", "admin"],
   manageBot: ["owner", "admin"],
   viewStats: ["owner", "admin"],

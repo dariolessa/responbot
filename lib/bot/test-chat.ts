@@ -80,6 +80,8 @@ export type ChatMessage = {
   failed: boolean
   /** Opciones para tocar (show_choices); en WhatsApp salen como botones o lista. */
   choices: { title: string; description?: string }[]
+  /** Foto de una ficha del catálogo (send_catalog_items). */
+  imageUrl: string | null
 }
 
 export type ChatState = { messages: ChatMessage[]; humanMode: boolean }
@@ -94,6 +96,7 @@ function toChatMessage(m: schema.Message): ChatMessage {
     tools: trace?.tools.map((t) => ({ name: t.name, ok: t.ok })) ?? [],
     failed: Boolean(trace?.error),
     choices: m.choices?.options.map((o) => ({ title: o.title, description: o.description })) ?? [],
+    imageUrl: m.direction === "outbound" ? m.mediaUrl : null,
   }
 }
 

@@ -91,6 +91,8 @@ export type ThreadMessage = {
   status: schema.Message["status"]
   error: string | null
   choices: string[]
+  /** Foto que mandó el bot (ficha del catálogo); las del cliente no se guardan. */
+  imageUrl: string | null
   /** "bot", el nombre de quien respondió desde el panel, o null si es del cliente. */
   author: string | null
   /** Opinión del equipo sobre una respuesta del bot. */
@@ -151,6 +153,7 @@ export async function loadThread(tenant: InboxTenant, conversationId: string, no
       status: m.status,
       error: m.error ?? (trace?.error ? "El bot no pudo responder bien este mensaje." : null),
       choices: m.choices?.options.map((o) => o.title) ?? [],
+      imageUrl: m.direction === "outbound" ? m.mediaUrl : null,
       author:
         m.direction === "inbound" ? null : m.sentBy ? (memberName.get(m.sentBy) ?? "Equipo") : "bot",
       rating: ratings.has(m.id) ? { value: ratings.get(m.id)!.rating, note: ratings.get(m.id)!.note } : null,

@@ -382,6 +382,7 @@ describe("devoluciones", () => {
       now,
       canBook: true,
       choices: null,
+      cards: [],
     }
   }
 

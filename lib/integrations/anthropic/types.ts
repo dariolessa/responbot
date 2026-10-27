@@ -26,3 +26,12 @@ export type { Anthropic }
 export type ImageDescriber = {
   describe(image: Uint8Array, mimeType: string): Promise<string>
 }
+
+/** Pedido de datos estructurados: el modelo responde llamando a una única herramienta. */
+export type StructuredModel = {
+  run(request: {
+    system: string
+    prompt: string
+    tool: { name: string; description: string; input_schema: Anthropic.Tool.InputSchema }
+  }): Promise<unknown>
+}

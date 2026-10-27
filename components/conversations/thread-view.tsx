@@ -215,7 +215,16 @@ function MessageBubble({
           message.status === "failed" && "border border-destructive/40",
         )}
       >
-        {MediaIcon ? (
+        {message.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- fotos del catálogo, de la web del negocio
+          <img
+            src={message.imageUrl}
+            alt=""
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            className="mb-2 aspect-[4/3] w-64 max-w-full rounded-lg object-cover"
+          />
+        ) : MediaIcon ? (
           <p className="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground">
             <MediaIcon className="size-3.5" />
             {message.type === "audio" ? "Audio" : "Imagen"}
