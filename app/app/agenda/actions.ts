@@ -11,6 +11,7 @@ import {
   canSeeCustomer,
   canUseResource,
   customersVisibleWhere,
+  realCustomersWhere,
   type AgendaAccess,
 } from "@/lib/booking/access"
 import {
@@ -103,6 +104,7 @@ export async function searchCustomers(input: { q: string }): Promise<ActionResul
         digits.length >= 4 ? ilike(schema.customers.phoneE164, `%${digits.replace(/^0+/, "")}%`) : undefined,
       ),
       customersVisibleWhere(access),
+      realCustomersWhere(),
     ),
     orderBy: [desc(schema.customers.updatedAt)],
     limit: 8,

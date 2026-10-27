@@ -19,7 +19,7 @@ export type Step = {
   title: string
   description: string
   href: string
-  /** Los pasos de conexiones y del bot llegan en fases siguientes. */
+  /** Los pasos de conexiones llegan en fases siguientes. */
   available: boolean
   optional?: boolean
 }
@@ -80,7 +80,7 @@ export const steps: Step[] = [
     title: "Probar el bot",
     description: "Un chat de prueba con tu asistente.",
     href: "/app/bot",
-    available: false,
+    available: true,
   },
 ]
 
@@ -99,7 +99,8 @@ export function pendingSteps(completed: readonly string[]): Step[] {
 /** A dónde sigue el asistente después de un paso. */
 export function nextStepHref(after: StepKey): string {
   const index = steps.findIndex((s) => s.key === after)
-  const next = steps.slice(index + 1).find((s) => s.available)
+  // El asistente recorre sus propias pantallas; los pasos que viven en el panel se ven en "listo".
+  const next = steps.slice(index + 1).find((s) => s.available && s.href.startsWith("/onboarding"))
   return next?.href ?? "/onboarding/listo"
 }
 

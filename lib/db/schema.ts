@@ -376,6 +376,8 @@ export const customers = pgTable(
     lastVisitAt: timestamp("last_visit_at", { withTimezone: true }),
     avgIntervalDays: integer("avg_interval_days"),
     optedOut: boolean("opted_out").notNull().default(false),
+    /** Cliente ficticio del chat de prueba del panel (uno por usuario); no aparece en Clientes. */
+    isTest: boolean("is_test").notNull().default(false),
     ...timestamps,
   },
   (t) => [uniqueIndex().on(t.businessId, t.phoneE164)],
@@ -683,3 +685,6 @@ export type Booking = typeof bookings.$inferSelect
 export type BookingEvent = typeof bookingEvents.$inferSelect
 export type BookingRules = typeof bookingRules.$inferSelect
 export type Invitation = typeof invitations.$inferSelect
+export type Conversation = typeof conversations.$inferSelect
+export type Message = typeof messages.$inferSelect
+export type BotSettings = typeof botSettings.$inferSelect

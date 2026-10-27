@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/layout/page-header"
 import { Input } from "@/components/ui/input"
 import { can } from "@/lib/auth/roles"
 import { getTenant } from "@/lib/auth/tenant"
-import { agendaAccess, customersVisibleWhere } from "@/lib/booking/access"
+import { agendaAccess, customersVisibleWhere, realCustomersWhere } from "@/lib/booking/access"
 import * as schema from "@/lib/db/schema"
 import { formatPhone } from "@/lib/phone"
 import { formatZoned } from "@/lib/time"
@@ -30,6 +30,7 @@ export default async function ClientesPage({ searchParams }: PageProps<"/app/cli
   const customers = await tenant.db.customers.findMany({
     where: and(
       customersVisibleWhere(access),
+      realCustomersWhere(),
       q
         ? or(
             ilike(schema.customers.name, like),

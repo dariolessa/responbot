@@ -22,7 +22,7 @@ export default async function ListoPage() {
       </h1>
       <p className="mt-2 text-sm text-muted-foreground">
         {pending.length === 0
-          ? "Ya podés cargar turnos desde el panel. Conectar WhatsApp y probar el bot llegan muy pronto."
+          ? "Ya podés cargar turnos desde el panel y probar el bot. Conectar WhatsApp llega muy pronto."
           : "Te faltan algunos pasos. Podés seguir ahora o desde el panel cuando quieras."}
       </p>
       <div className="mt-8 rounded-lg border p-2">
