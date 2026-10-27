@@ -87,7 +87,7 @@ describe("una respuesta con herramientas", () => {
     expect(first!.system[0]!.text).not.toContain("2026-11-02")
     expect(first!.system[1]!.text).toContain("2026-11-02")
     expect(first!.system[1]!.text).toContain("Es el primer mensaje")
-    expect(first!.tools).toHaveLength(11)
+    expect(first!.tools).toHaveLength(12)
     expect(first!.messages).toEqual([{ role: "user", content: "Quiero un corte el martes temprano" }])
 
     // La vuelta siguiente recibe la respuesta del modelo y el resultado de la herramienta.

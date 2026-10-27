@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm"
+import { and, eq, inArray, or, sql } from "drizzle-orm"
 
 import { can } from "@/lib/auth/roles"
 import type { Tenant } from "@/lib/auth/tenant"
@@ -45,6 +45,24 @@ export function customersVisibleWhere(access: AgendaAccess) {
   if (access.all) return undefined
   if (access.resourceIds.length === 0) return sql`false`
   return sql`exists (select 1 from ${schema.bookings} where ${schema.bookings.customerId} = ${schema.customers.id} and ${inArray(schema.bookings.resourceId, access.resourceIds)})`
+}
+
+/**
+ * Conversaciones visibles: todas para dueño y admin; para un profesional, las
+ * de sus clientes y las que tomó o le asignaron.
+ */
+export function conversationsVisibleWhere(access: AgendaAccess, userId: string) {
+  if (access.all) return undefined
+  const ofOwnCustomers =
+    access.resourceIds.length === 0
+      ? sql`false`
+      : sql`exists (select 1 from ${schema.bookings} where ${schema.bookings.customerId} = ${schema.conversations.customerId} and ${inArray(schema.bookings.resourceId, access.resourceIds)})`
+  return or(eq(schema.conversations.assignedTo, userId), ofOwnCustomers)
+}
+
+/** Conversaciones de clientes reales (sin las del chat de prueba). */
+export function realConversationsWhere() {
+  return sql`exists (select 1 from ${schema.customers} where ${schema.customers.id} = ${schema.conversations.customerId} and ${schema.customers.isTest} = false)`
 }
 
 /** Excluye a los clientes ficticios del chat de prueba (listas y búsquedas). */

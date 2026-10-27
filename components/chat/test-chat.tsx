@@ -23,6 +23,7 @@ const toolLabels: Record<string, string> = {
   get_business_info: "Miró los datos del negocio",
   save_customer_name: "Guardó el nombre",
   handoff_to_human: "Derivó a una persona",
+  show_choices: "Mostró opciones",
 }
 
 const suggestions = ["Hola, ¿qué servicios tienen?", "Quiero un turno para mañana", "¿Dónde quedan?"]
@@ -111,11 +112,20 @@ export function TestChat({
             ) : null}
           </div>
         ) : (
-          state.messages.map((m) => <Bubble key={m.id} message={m} />)
+          state.messages.map((m, i) => (
+            <Bubble
+              key={m.id}
+              message={m}
+              // Las opciones solo se pueden tocar en la última respuesta, como en WhatsApp.
+              onChoose={i === state.messages.length - 1 && !pending && !state.humanMode ? send : undefined}
+            />
+          ))
         )}
         {pendingText ? (
           <>
-            <Bubble message={{ id: "pending", direction: "inbound", body: pendingText, at: "", tools: [], failed: false }} />
+            <Bubble
+              message={{ id: "pending", direction: "inbound", body: pendingText, at: "", tools: [], failed: false, choices: [] }}
+            />
             <div className="flex" aria-live="polite">
               <span className="inline-flex items-center gap-1 rounded-2xl rounded-bl-sm border bg-background px-3.5 py-3">
                 <span className="sr-only">{assistantName} está escribiendo</span>
@@ -185,7 +195,7 @@ export function TestChat({
   )
 }
 
-function Bubble({ message }: { message: ChatMessage }) {
+function Bubble({ message, onChoose }: { message: ChatMessage; onChoose?: (text: string) => void }) {
   const fromCustomer = message.direction === "inbound"
   return (
     <div className={cn("flex flex-col gap-1", fromCustomer ? "items-end" : "items-start")}>
@@ -216,6 +226,24 @@ function Bubble({ message }: { message: ChatMessage }) {
       >
         {message.body}
       </p>
+      {!fromCustomer && message.choices.length > 0 ? (
+        <ul className="flex max-w-[85%] flex-wrap gap-1.5" aria-label="Opciones">
+          {message.choices.map((c) => (
+            <li key={c.title}>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!onChoose}
+                onClick={() => onChoose?.(c.description ? `${c.title} (${c.description})` : c.title)}
+                className="h-auto min-h-9 flex-col items-start gap-0 py-1.5 text-left"
+              >
+                <span>{c.title}</span>
+                {c.description ? <span className="text-xs font-normal text-muted-foreground">{c.description}</span> : null}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   )
 }

@@ -4,7 +4,7 @@ import Anthropic from "@anthropic-ai/sdk"
 
 import { env } from "@/lib/env"
 
-import type { BotModel, BotRequest } from "./types"
+import type { BotModel, BotRequest, ImageDescriber } from "./types"
 
 /*
  * Cliente de Claude para el bot (docs/SPEC.md, "Anthropic"). El motor recibe
@@ -13,6 +13,10 @@ import type { BotModel, BotRequest } from "./types"
 
 /** Modelo de conversación del SPEC. */
 export const CHAT_MODEL = "claude-sonnet-5-5"
+/** Modelo para tareas cortas (describir imágenes). */
+export const SHORT_TASK_MODEL = "claude-haiku-5-5"
+
+const imageTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const
 
 export function isAnthropicConfigured(): boolean {
   return Boolean(env.ANTHROPIC_API_KEY)
@@ -45,6 +49,48 @@ export function anthropicModel(): BotModel {
         },
         { timeout: options?.timeoutMs, signal: options?.signal },
       )
+    },
+  }
+}
+
+/** Describe imágenes de clientes con el modelo de tareas cortas. */
+export function anthropicDescriber(): ImageDescriber {
+  if (!env.ANTHROPIC_API_KEY) {
+    throw new Error("Falta ANTHROPIC_API_KEY: el bot necesita la clave de Anthropic.")
+  }
+  client ??= new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, maxRetries: 2 })
+  const anthropic = client
+
+  return {
+    async describe(image, mimeType) {
+      const mediaType = imageTypes.find((t) => t === mimeType)
+      if (!mediaType) throw new Error(`Formato de imagen no soportado: ${mimeType}`)
+      const response = await anthropic.messages.create(
+        {
+          model: SHORT_TASK_MODEL,
+          max_tokens: 300,
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "image",
+                  source: { type: "base64", media_type: mediaType, data: Buffer.from(image).toString("base64") },
+                },
+                {
+                  type: "text",
+                  text: "Un cliente le mandó esta imagen a un negocio de servicios con turno (peluquería, uñas, estética). Describila en español en una o dos frases, con lo que sirva para atenderlo (estilo, largo, colores, diseño). Si tiene texto, transcribilo. Solo la descripción.",
+                },
+              ],
+            },
+          ],
+        },
+        { timeout: 20_000 },
+      )
+      return response.content
+        .flatMap((b) => (b.type === "text" ? [b.text] : []))
+        .join(" ")
+        .trim()
     },
   }
 }

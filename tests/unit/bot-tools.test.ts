@@ -37,6 +37,7 @@ async function contextFor(scoped: ScopedDb, userId: string, overrides: Partial<T
     channel: "test_chat",
     now: NOW,
     canBook: true,
+    choices: null,
     ...overrides,
   } satisfies ToolContext
 }
@@ -57,7 +58,7 @@ afterAll(async () => {
 })
 
 describe("definiciones", () => {
-  it("expone las once herramientas del SPEC con JSON Schema de objeto", () => {
+  it("expone las once herramientas del SPEC y show_choices, con JSON Schema de objeto", () => {
     expect(apiTools.map((t) => t.name)).toEqual([
       "list_services",
       "list_staff",
@@ -70,6 +71,7 @@ describe("definiciones", () => {
       "get_business_info",
       "save_customer_name",
       "handoff_to_human",
+      "show_choices",
     ])
     for (const tool of apiTools) {
       expect(tool.input_schema.type).toBe("object")
@@ -78,7 +80,7 @@ describe("definiciones", () => {
     }
     const availability = apiTools.find((t) => t.name === "check_availability")!
     expect(availability.input_schema.required).toEqual(["service_id", "date_from"])
-    expect(botTools).toHaveLength(11)
+    expect(botTools).toHaveLength(12)
   })
 
   it("rechaza entradas inválidas sin ejecutar nada", async () => {

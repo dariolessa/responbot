@@ -21,3 +21,8 @@ export type BotModel = {
 }
 
 export type { Anthropic }
+
+/** Describe una imagen que mandó un cliente (por ejemplo, un diseño de uñas) en una o dos frases. */
+export type ImageDescriber = {
+  describe(image: Uint8Array, mimeType: string): Promise<string>
+}
