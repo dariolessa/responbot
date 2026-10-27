@@ -47,6 +47,11 @@ export function customersVisibleWhere(access: AgendaAccess) {
   return sql`exists (select 1 from ${schema.bookings} where ${schema.bookings.customerId} = ${schema.customers.id} and ${inArray(schema.bookings.resourceId, access.resourceIds)})`
 }
 
+/** Excluye a los clientes ficticios del chat de prueba (listas y búsquedas). */
+export function realCustomersWhere() {
+  return eq(schema.customers.isTest, false)
+}
+
 /** ¿Este cliente es visible para quien pregunta? */
 export async function canSeeCustomer(scoped: ScopedDb, access: AgendaAccess, customerId: string) {
   const row = await scoped.customers.findFirst(

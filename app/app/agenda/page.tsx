@@ -149,8 +149,10 @@ export default async function AgendaPage({ searchParams }: PageProps<"/app/agend
         resourceId: b.resourceId,
         serviceId: b.serviceId,
         customerId: b.customerId,
-        customerName: customer?.name ?? (customer ? formatPhone(customer.phoneE164) : "Cliente"),
-        customerPhone: customer?.phoneE164 ?? "",
+        customerName: customer?.isTest
+          ? `Cliente de prueba${customer.name ? ` (${customer.name})` : ""}`
+          : (customer?.name ?? (customer ? formatPhone(customer.phoneE164) : "Cliente")),
+        customerPhone: customer && !customer.isTest ? customer.phoneE164 : "",
         serviceName: service?.name ?? "Servicio",
         status: b.status,
         date: segment.date,

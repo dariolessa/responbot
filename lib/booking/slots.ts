@@ -21,6 +21,8 @@ export type FindSlotsInput = {
   to?: DateString
   now?: Date
   ignoreBookingWindow?: boolean
+  /** Al reprogramar, el turno que se mueve no ocupa su propio lugar. */
+  excludeBookingId?: string
 }
 
 export async function findSlots(scoped: ScopedDb, input: FindSlotsInput): Promise<Slot[]> {
@@ -58,7 +60,7 @@ export async function findSlots(scoped: ScopedDb, input: FindSlotsInput): Promis
   const [hours, bookings, blocks] = await Promise.all([
     scoped.workingHours.findMany({ where: inArray(schema.workingHours.resourceId, ids) }),
     scoped.bookings.findMany({
-      where: and(occupyingBookingsWhere(margin, end), inArray(schema.bookings.resourceId, ids)),
+      where: and(occupyingBookingsWhere(margin, end, input.excludeBookingId), inArray(schema.bookings.resourceId, ids)),
     }),
     scoped.timeOff.findMany({
       where: and(

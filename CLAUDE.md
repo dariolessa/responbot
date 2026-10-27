@@ -6,7 +6,7 @@
 
 ## Producto
 
-SaaS multi-negocio "Responbot" (en el SPEC figura como "Agendabot", nombre provisorio; la marca vive en `lib/brand.ts`): un asistente de WhatsApp que responde consultas, cotiza servicios con precio fijo y reserva turnos, más un panel web con agenda para el dueño y su equipo. El MVP apunta a servicios con turno (peluquerías, barberías, uñas, estética), Uruguay primero. Estado actual: Fases 0 (base) y 1 (agenda sin bot) terminadas; sigue la Fase 2 (bot en chat de prueba).
+SaaS multi-negocio "Responbot" (en el SPEC figura como "Agendabot", nombre provisorio; la marca vive en `lib/brand.ts`): un asistente de WhatsApp que responde consultas, cotiza servicios con precio fijo y reserva turnos, más un panel web con agenda para el dueño y su equipo. El MVP apunta a servicios con turno (peluquerías, barberías, uñas, estética), Uruguay primero. Estado actual: Fases 0 (base), 1 (agenda sin bot) y 2 (bot en el chat de prueba del panel) terminadas; sigue la Fase 3 (WhatsApp real).
 
 ## Stack
 
@@ -50,7 +50,10 @@ SaaS multi-negocio "Responbot" (en el SPEC figura como "Agendabot", nombre provi
 - `lib/auth/`: Auth.js (`index.ts`), roles, `tenant.ts` (sesión → negocio activo → scope).
 - `lib/db/`: `schema.ts`, `scoped.ts`, `migrations/`.
 - `lib/booking/`: disponibilidad (`availability.ts`, pura), alta/mover/estados de turnos (`create.ts`), qué ve cada rol (`access.ts`).
+- `lib/bot/`: `engine.ts` (motor: candado, límites, vueltas de herramientas, traza y consumo), `tools/` (las 11 herramientas con Zod), `prompts/` (reglas fijas y armado del system prompt), `templates/` (texto por arquetipo), `catalog.ts`, `test-chat.ts` (cliente ficticio del chat de prueba), `usage.ts`.
+- `lib/integrations/anthropic/`: cliente de Claude detrás de la interfaz `BotModel`; los tests usan un modelo con guion (`tests/helpers/bot.ts`).
 - `lib/catalog.ts` (servicios, profesionales, horarios), `lib/onboarding/` (plantillas y pasos), `lib/forms.ts` (esquemas Zod y `ActionResult`), `lib/time.ts`, `lib/money.ts`, `lib/phone.ts`.
+- `components/chat/test-chat.tsx` (chat de prueba de `/app/bot`).
 - `components/agenda/` (vistas Día, Semana y Lista, hojas de turno y bloqueo), `components/forms/`.
 - PWA: `app/manifest.ts`, `public/sw.js` (solo página sin conexión), `public/icons/`.
 - `tests/unit/`: tests; `tests/helpers/db.ts` levanta Postgres en memoria con las migraciones reales.
