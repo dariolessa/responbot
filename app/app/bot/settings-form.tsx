@@ -85,7 +85,7 @@ export function BotSettingsForm({ initial }: { initial: BotSettingsValues }) {
             id="bot-welcome"
             value={values.welcomeMessage}
             maxLength={500}
-            placeholder="¡Hola! Soy el asistente de la peluquería. ¿En qué te ayudo?"
+            placeholder="¡Hola! Soy el asistente del negocio. ¿En qué te ayudo?"
             onChange={(e) => set("welcomeMessage", e.target.value)}
           />
         </Field>

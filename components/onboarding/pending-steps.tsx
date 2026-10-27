@@ -71,8 +71,8 @@ export function PendingStepsCard({ completed }: { completed: readonly string[] }
     <section className="mb-8 rounded-lg border p-4 sm:p-6">
       <h2 className="font-medium">Terminá de configurar tu negocio</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        {pending.length === 1 ? "Te falta un paso" : `Te faltan ${pending.length} pasos`} para empezar a dar
-        turnos.
+        {pending.length === 1 ? "Te falta un paso" : `Te faltan ${pending.length} pasos`} para que el bot
+        atienda por WhatsApp. La agenda ya la podés usar.
       </p>
       <div className="mt-4">
         <StepList completed={completed} compact />
