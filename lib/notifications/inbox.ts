@@ -62,7 +62,11 @@ export async function markAllRead(scoped: ScopedDb, userId: string, now = new Da
 
 /** Tipos que le llegan a cada rol (un profesional solo recibe los de sus turnos). */
 export function typesForRole(role: schema.Role): NotificationType[] {
-  return notificationTypeList.filter((type) => role !== "staff" || notificationTypes[type].forStaff)
+  return notificationTypeList.filter((type) => {
+    const def = notificationTypes[type]
+    if (def.ownerOnly) return role === "owner"
+    return role !== "staff" || def.forStaff
+  })
 }
 
 export type PrefsForm = {

@@ -49,5 +49,4 @@ Hay cuatro plantillas nuevas: `sena_pendiente` (link de pago), `retencion_vencid
 
 ## Qué queda para después
 
-- Limitar las señas y la lista de espera al plan Pro llega con Stripe (Fase 6).
 - El correo "Mercado Pago desconectado" usa el correo genérico de avisos; uno propio con más detalle puede venir después.

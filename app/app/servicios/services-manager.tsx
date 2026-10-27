@@ -27,6 +27,7 @@ export type ServiceItem = {
   durationMinutes: number
   price: number
   depositOverride: number | null
+  rebookIntervalDays: number | null
   active: boolean
   resourceIds: string[]
 }
@@ -38,6 +39,7 @@ type Draft = {
   durationMinutes: number
   price: string
   depositOverride: string
+  rebookWeeks: string
   active: boolean
   resourceIds: string[]
 }
@@ -70,6 +72,7 @@ export function ServicesManager({
             price: centsToInput(service.price),
             depositOverride:
               service.depositOverride === null ? "" : centsToInput(service.depositOverride),
+            rebookWeeks: service.rebookIntervalDays ? String(Math.round(service.rebookIntervalDays / 7)) : "",
             active: service.active,
             resourceIds: service.resourceIds,
           }
@@ -79,6 +82,7 @@ export function ServicesManager({
             durationMinutes: 30,
             price: "",
             depositOverride: "",
+            rebookWeeks: "",
             active: true,
             resourceIds: resources.map((r) => r.id),
           },
@@ -293,6 +297,20 @@ export function ServicesManager({
                 className="font-mono"
                 value={draft.depositOverride}
                 onChange={(e) => set("depositOverride", e.target.value)}
+              />
+            </Field>
+            <Field
+              label="Cada cuántas semanas vuelve (opcional)"
+              htmlFor="service-rebook"
+              hint="Para invitar a volver a quien se pasó (por ejemplo 5 para un corte). Si lo dejás vacío, se usa el ritmo de cada cliente."
+              error={fieldErrors.rebookWeeks}
+            >
+              <Input
+                id="service-rebook"
+                inputMode="numeric"
+                className="font-mono"
+                value={draft.rebookWeeks}
+                onChange={(e) => set("rebookWeeks", e.target.value)}
               />
             </Field>
             <div className="grid gap-2">

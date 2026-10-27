@@ -6,6 +6,7 @@ import { z } from "zod"
 
 import { getTenant, type Tenant } from "@/lib/auth/tenant"
 import { can } from "@/lib/auth/roles"
+import { readOnlyFailure } from "@/lib/billing/access"
 import {
   agendaAccess,
   canSeeCustomer,
@@ -159,6 +160,8 @@ export type CreateBookingInput = z.input<typeof createInput>
 
 export async function createBookingAction(input: CreateBookingInput): Promise<ActionResult<{ id: string }>> {
   const { tenant, access, actor, timezone } = await context()
+  const blocked = await readOnlyFailure(tenant.db)
+  if (blocked) return blocked
   const parsed = createInput.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
   const { serviceId, date, time, customer } = parsed.data
@@ -246,6 +249,8 @@ async function tryPaymentLink(tenant: Tenant, booking: schema.Booking): Promise<
 
 export async function moveBookingAction(input: z.input<typeof moveInput>): Promise<ActionResult> {
   const { tenant, access, actor, timezone } = await context()
+  const blocked = await readOnlyFailure(tenant.db)
+  if (blocked) return blocked
   const parsed = moveInput.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
   const booking = await visibleBooking(tenant, access, parsed.data.bookingId)
@@ -280,6 +285,8 @@ const statusInput = z.object({
 
 export async function changeStatusAction(input: z.input<typeof statusInput>): Promise<ActionResult> {
   const { tenant, access, actor } = await context()
+  const blocked = await readOnlyFailure(tenant.db)
+  if (blocked) return blocked
   const parsed = statusInput.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
   const booking = await visibleBooking(tenant, access, parsed.data.bookingId)
@@ -472,6 +479,8 @@ const timeOffInput = z
 
 export async function createTimeOff(input: z.input<typeof timeOffInput>): Promise<ActionResult> {
   const { tenant, access, timezone } = await context()
+  const blocked = await readOnlyFailure(tenant.db)
+  if (blocked) return blocked
   const parsed = timeOffInput.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
   const v = parsed.data
@@ -499,6 +508,8 @@ export async function createTimeOff(input: z.input<typeof timeOffInput>): Promis
 
 export async function deleteTimeOff(input: { id: string }): Promise<ActionResult> {
   const { tenant, access } = await context()
+  const blocked = await readOnlyFailure(tenant.db)
+  if (blocked) return blocked
   const id = z.uuid().parse(input.id)
   const block = await tenant.db.timeOff.findById(id)
   if (!block) return ok()

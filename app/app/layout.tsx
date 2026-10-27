@@ -5,7 +5,10 @@ import { BusinessSwitcher, type SwitcherBusiness } from "@/components/layout/bus
 import { Logo } from "@/components/layout/logo"
 import { ThemeToggle } from "@/components/layout/theme-toggle"
 import { UserMenu } from "@/components/layout/user-menu"
+import { BillingBanner } from "@/components/billing/billing-banner"
 import { getTenant } from "@/lib/auth/tenant"
+import { monthUsage } from "@/lib/billing/access"
+import { billingState } from "@/lib/billing/state"
 import { unreadCount } from "@/lib/notifications/inbox"
 
 /*
@@ -16,6 +19,9 @@ import { unreadCount } from "@/lib/notifications/inbox"
 export default async function AppLayout({ children }: LayoutProps<"/app">) {
   const { user, role, business, memberships, db } = await getTenant()
   const badges = { "/app/notificaciones": await unreadCount(db, user.id) }
+  const now = new Date()
+  const billing = billingState((await db.business())!, now)
+  const usage = await monthUsage(db, billing, business.timezone, now)
 
   const toSwitcher = (m: typeof business): SwitcherBusiness => ({
     businessId: m.businessId,
@@ -57,6 +63,11 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
       </header>
 
       <main className="mx-auto w-full max-w-6xl px-4 pt-6 pb-28 sm:px-6 md:px-10 md:pt-10 md:pb-12">
+        <BillingBanner
+          state={billing}
+          overLimit={usage.conversations.used >= usage.conversations.limit}
+          isOwner={role === "owner"}
+        />
         {children}
       </main>
 

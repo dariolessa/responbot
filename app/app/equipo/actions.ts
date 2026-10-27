@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
 import { requirePermission } from "@/lib/auth/tenant"
+import { activeStaffCount, businessBilling, readOnlyFailure, staffLimitFailure } from "@/lib/billing/access"
 import { audit, replaceWorkingHours, setResourceServices } from "@/lib/catalog"
 import * as schema from "@/lib/db/schema"
 import {
@@ -35,6 +36,8 @@ const staffInput = z.object({
 
 export async function saveStaff(input: z.input<typeof staffInput>): Promise<ActionResult> {
   const tenant = await requirePermission("manageTeam")
+  const blocked = await readOnlyFailure(tenant.db)
+  if (blocked) return blocked
   const parsed = staffInput.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
   const { id, serviceIds, hours, userId, ...values } = parsed.data
@@ -49,6 +52,15 @@ export async function saveStaff(input: z.input<typeof staffInput>): Promise<Acti
       and(eq(schema.resources.userId, userId), id ? ne(schema.resources.id, id) : undefined),
     )
     if (taken) return fail(`Esa persona ya tiene su agenda como "${taken.name}".`)
+  }
+
+  // Límite de profesionales activos del plan: cuenta al crear uno o al reactivarlo.
+  if (values.active) {
+    const current = id ? await tenant.db.resources.findById(id) : undefined
+    if (!current?.active) {
+      const limit = staffLimitFailure(await businessBilling(tenant.db), (await activeStaffCount(tenant.db)) + 1)
+      if (limit) return limit
+    }
   }
 
   await tenant.db.transaction(async (tx) => {
@@ -85,6 +97,8 @@ const inviteInput = z.object({
 
 export async function invite(input: z.input<typeof inviteInput>): Promise<ActionResult<{ sent: boolean }>> {
   const tenant = await requirePermission("manageTeam")
+  const blocked = await readOnlyFailure(tenant.db)
+  if (blocked) return blocked
   const parsed = inviteInput.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
@@ -106,6 +120,8 @@ export async function invite(input: z.input<typeof inviteInput>): Promise<Action
 
 export async function cancelInvitation(input: { id: string }): Promise<ActionResult> {
   const tenant = await requirePermission("manageTeam")
+  const blocked = await readOnlyFailure(tenant.db)
+  if (blocked) return blocked
   const { id } = z.object({ id: z.uuid() }).parse(input)
   await revokeInvitation(tenant, id)
   revalidatePath("/app/equipo")
@@ -126,6 +142,8 @@ const memberInput = z.object({
  */
 export async function updateMember(input: z.input<typeof memberInput>): Promise<ActionResult> {
   const tenant = await requirePermission("manageTeam")
+  const blocked = await readOnlyFailure(tenant.db)
+  if (blocked) return blocked
   const parsed = memberInput.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
   const { membershipId, role, active } = parsed.data

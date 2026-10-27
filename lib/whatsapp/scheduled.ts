@@ -4,6 +4,7 @@ import { previewOf } from "@/lib/bot/engine"
 import { addUsage, usagePeriod } from "@/lib/bot/usage"
 import { changeBookingStatus } from "@/lib/booking/create"
 import { bookingPayload } from "@/lib/booking/customer-messages"
+import { hasUpcomingBooking, lastCompletedBooking, reactivationButtonId } from "@/lib/booking/follow-ups"
 import { isOpen } from "@/lib/booking/policies"
 import { waitlistButtonId } from "@/lib/booking/waitlist"
 import * as schema from "@/lib/db/schema"
@@ -83,6 +84,10 @@ function messageFor(kind: schema.ScheduledMessage["kind"]): TemplateName | null 
       return "lugar_liberado"
     case "waitlist_taken":
       return "lugar_tomado"
+    case "reactivation":
+      return "reactivacion_cliente"
+    case "post_service":
+      return "pedido_resena"
     default:
       return null
   }
@@ -98,6 +103,7 @@ type MessageData = {
   deposit: string
   link: string
   holdUntil: string
+  business: string
 }
 
 function paramsFor(template: TemplateName, d: MessageData): string[] {
@@ -116,6 +122,10 @@ function paramsFor(template: TemplateName, d: MessageData): string[] {
       return [d.name, d.service, d.day, d.time, d.deposit, d.link, d.holdUntil]
     case "sena_devuelta":
       return [d.name, d.deposit, d.service, d.day]
+    case "reactivacion_cliente":
+      return [d.name, d.service.toLowerCase(), d.staff]
+    case "pedido_resena":
+      return [d.name, d.business, d.link]
     default:
       return []
   }
@@ -148,6 +158,10 @@ function staleReason(
       return booking?.status === "pending_payment" && booking.holdExpiresAt && booking.holdExpiresAt > now
         ? null
         : "El turno ya no espera la seña."
+    case "reactivation":
+      return booking?.status === "completed" ? null : "No hay una visita anterior."
+    case "post_service":
+      return booking?.status === "completed" ? null : "El turno ya no figura atendido."
     default:
       return booking && isOpen(booking.status) && booking.startsAt > now ? null : "El turno ya no está vigente."
   }
@@ -160,7 +174,14 @@ async function sendOne(
   now: Date,
 ): Promise<Outcome> {
   const isReminder = row.kind === "reminder_24h" || row.kind === "reminder_2h"
-  const booking = row.bookingId ? await scoped.bookings.findById(row.bookingId) : undefined
+  // Recordatorios, reactivaciones y reseñas respetan la BAJA; confirmaciones y avisos de turnos no.
+  const respectsOptOut = isReminder || row.kind === "reactivation" || row.kind === "post_service"
+  // La reactivación habla de la última visita: servicio y profesional habituales.
+  const booking = row.bookingId
+    ? await scoped.bookings.findById(row.bookingId)
+    : row.kind === "reactivation"
+      ? await lastCompletedBooking(scoped, row.customerId)
+      : undefined
   const entry = row.waitlistEntryId ? await scoped.waitlistEntries.findById(row.waitlistEntryId) : undefined
   const customer = await scoped.customers.findById(row.customerId)
   if ((!booking && !entry) || !customer || customer.isTest) return { status: "cancelled", error: "El turno ya no existe." }
@@ -170,8 +191,19 @@ async function sendOne(
   if (isReminder && now.getTime() - row.sendAt.getTime() > REMINDER_GRACE_MS) {
     return { status: "cancelled", error: "No salió a tiempo." }
   }
-  if (isReminder && customer.optedOut) {
+  if (respectsOptOut && customer.optedOut) {
     return { status: "cancelled", error: "El cliente pidió no recibir recordatorios." }
+  }
+  if (row.kind === "reactivation" && (await hasUpcomingBooking(scoped, customer.id, now))) {
+    return { status: "cancelled", error: "Ya tiene un turno reservado." }
+  }
+  let reviewUrl = ""
+  if (row.kind === "post_service") {
+    const settings = await scoped.botSettings.findFirst()
+    if (!settings?.reviewRequestEnabled || !settings.reviewUrl) {
+      return { status: "cancelled", error: "El pedido de reseñas está apagado." }
+    }
+    reviewUrl = settings.reviewUrl
   }
 
   const account = await scoped.whatsappAccounts.findFirst(eq(schema.whatsappAccounts.status, "active"))
@@ -204,8 +236,9 @@ async function sendOne(
     time: toTimeString(subject.startsAt, tz),
     address: business?.address || business?.name || "el local",
     deposit: booking ? formatMoney(booking.depositAmount, booking.currency) : "",
-    link,
+    link: row.kind === "post_service" ? reviewUrl : link,
     holdUntil: booking?.holdExpiresAt ? toTimeString(booking.holdExpiresAt, tz) : "",
+    business: business?.name ?? "",
   }
   const template = messageFor(row.kind)
   if (!template) return { status: "cancelled", error: "Tipo de mensaje que todavía no se manda." }
@@ -216,7 +249,12 @@ async function sendOne(
       ? reminderButtons.map((b) => ({ id: reminderButtonId(b.action, booking.id), title: b.title }))
       : row.kind === "waitlist_offer" && entry
         ? [{ id: waitlistButtonId(entry.id), title: "Lo quiero" }]
-        : []
+        : row.kind === "reactivation"
+          ? [
+              { id: reactivationButtonId("yes", customer.id), title: "Sí, quiero" },
+              { id: reactivationButtonId("no", customer.id), title: "Ahora no" },
+            ]
+          : []
 
   const { conversation } = await findOrCreateConversation(scoped, customer.phoneE164, customer.name)
   const windowOpen = isWindowOpen(conversation.lastInboundAt, now)

@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm"
 
 import { handleIncomingMessage, type HandleMessageInput } from "@/lib/bot/engine"
+import { parseReactivationButton, reactivationReply } from "@/lib/booking/follow-ups"
 import { acceptWaitlistOffer, parseWaitlistButton } from "@/lib/booking/waitlist"
 import * as schema from "@/lib/db/schema"
 import { forBusiness, forPlatform, type AnyDb, type ScopedDb } from "@/lib/db/scoped"
@@ -190,6 +191,11 @@ async function prepare(
         const reply = await acceptWaitlistOffer(scoped, customer, offer.entryId, content.title, now)
         return { ...reply, stored: { type: "interactive", body: content.title } }
       }
+      const comeBack = parseReactivationButton(content.id)
+      if (comeBack) {
+        const reply = await reactivationReply(scoped, customer, comeBack, content.title)
+        return { ...reply, stored: { type: "interactive", body: content.title, transcript: reply.text === content.title ? null : reply.text } }
+      }
       const button = parseReminderButton(content.id)
       if (button) {
         const reply = await reminderReply(scoped, customer, button, content.title, now)
@@ -204,6 +210,11 @@ async function prepare(
       if (offer) {
         const reply = await acceptWaitlistOffer(scoped, customer, offer.entryId, content.text, now)
         return { ...reply, stored: { type: "interactive", body: content.text } }
+      }
+      const comeBack = parseReactivationButton(content.payload)
+      if (comeBack) {
+        const reply = await reactivationReply(scoped, customer, comeBack, content.text)
+        return { ...reply, stored: { type: "interactive", body: content.text, transcript: reply.text === content.text ? null : reply.text } }
       }
       const button = parseReminderButton(content.payload)
       if (button) {

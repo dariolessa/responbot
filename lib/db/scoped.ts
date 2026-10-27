@@ -558,6 +558,16 @@ export function forPlatform(db: AnyDb) {
       return rows.map((r) => r.id)
     },
 
+    /** Stripe avisa con el cliente: identifica al negocio. */
+    async businessByStripeCustomerId(customerId: string) {
+      const [row] = await db
+        .select({ id: schema.businesses.id })
+        .from(schema.businesses)
+        .where(eq(schema.businesses.stripeCustomerId, customerId))
+        .limit(1)
+      return row
+    },
+
     /** Resend avisó un rebote o una queja: no se le mandan más correos de avisos a esa dirección. */
     async markEmailBounced(email: string, at: Date) {
       const rows = await db

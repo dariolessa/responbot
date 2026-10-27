@@ -202,6 +202,15 @@ export const businesses = pgTable("businesses", {
   plan: planEnum("plan").notNull().default("trial"),
   trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
   stripeCustomerId: text("stripe_customer_id").unique(),
+  /** Suscripción de Stripe y su estado (active, trialing, past_due, unpaid, canceled…), copiados del webhook. */
+  stripeSubscriptionId: text("stripe_subscription_id").unique(),
+  subscriptionStatus: text("subscription_status"),
+  currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+  /** Primer cobro fallido de la racha actual; cuenta los 7 días de gracia. Nulo = al día. */
+  paymentFailedAt: timestamp("payment_failed_at", { withTimezone: true }),
+  /** Última factura de la que se mandó el recibo (Stripe reintenta los eventos). */
+  lastReceiptInvoiceId: text("last_receipt_invoice_id"),
   /** Pasos del asistente de alta ya completados (ver lib/onboarding/steps.ts). */
   onboardingCompleted: text("onboarding_completed")
     .array()
@@ -318,6 +327,8 @@ export const services = pgTable(
     depositOverride: integer("deposit_override"),
     active: boolean("active").notNull().default(true),
     sortOrder: integer("sort_order").notNull().default(0),
+    /** Cada cuántos días suele repetirse (por ejemplo 35 para un corte); manda en la reactivación. Nulo = el intervalo del cliente. */
+    rebookIntervalDays: integer("rebook_interval_days"),
     ...timestamps,
   },
   (t) => [
@@ -624,6 +635,13 @@ export const botSettings = pgTable("bot_settings", {
   faq: jsonb("faq").$type<{ question: string; answer: string }[]>().notNull().default([]),
   replyHours: replyHoursEnum("reply_hours").notNull().default("always"),
   offHoursMessage: text("off_hours_message"),
+  /** Reactivación automática de clientes que pasaron su intervalo habitual (plan Equipo). */
+  reactivationEnabled: boolean("reactivation_enabled").notNull().default(true),
+  /** Pedido de reseña después del servicio: apagado hasta que se cargue el enlace. */
+  reviewRequestEnabled: boolean("review_request_enabled").notNull().default(false),
+  reviewUrl: text("review_url"),
+  /** Horas después de marcar el turno atendido. */
+  reviewDelayHours: integer("review_delay_hours").notNull().default(2),
   ...timestamps,
 })
 
@@ -726,6 +744,11 @@ export const usageCounters = pgTable(
     aiInputTokens: integer("ai_input_tokens").notNull().default(0),
     aiOutputTokens: integer("ai_output_tokens").notNull().default(0),
     templatesSent: integer("templates_sent").notNull().default(0),
+    /** Avisos de uso ya mandados en el mes (por ejemplo conversations_80, conversations_100). */
+    alertsSent: text("alerts_sent")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     ...timestamps,
   },
   (t) => [uniqueIndex().on(t.businessId, t.period)],

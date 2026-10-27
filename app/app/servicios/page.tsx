@@ -30,6 +30,7 @@ export default async function ServiciosPage() {
           durationMinutes: s.durationMinutes,
           price: s.price,
           depositOverride: s.depositOverride,
+          rebookIntervalDays: s.rebookIntervalDays,
           active: s.active,
           resourceIds: links.filter((l) => l.serviceId === s.id).map((l) => l.resourceId),
         }))}

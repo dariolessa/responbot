@@ -2,8 +2,11 @@ import "server-only"
 
 import { db } from "@/lib/db"
 import { forBusiness, forPlatform } from "@/lib/db/scoped"
+import { runBillingHourly } from "@/lib/billing/lifecycle"
 import { expireOldWaitlist } from "@/lib/booking/waitlist"
 import { paymentDeps } from "@/lib/payments/deps"
+import { PURGE_HOUR, purgeOldMessages } from "@/lib/privacy"
+import { formatZoned } from "@/lib/time"
 import { checkMercadoPagoTokens } from "@/lib/payments/token-health"
 import { expireHolds } from "@/lib/payments/mercadopago"
 import { checkWhatsAppTokens } from "@/lib/whatsapp/token-health"
@@ -44,7 +47,11 @@ export async function runScheduledMessages(now = new Date()) {
   return forEachBusiness(ids, (id) => flushBusiness(db, id, deps, now))
 }
 
-/** Cada hora: resumen diario y semanal a las 8:00 locales, y correos de alta incompleta. */
+/**
+ * Cada hora: resumen diario y semanal a las 8:00 locales, correos de alta
+ * incompleta y de fin de prueba, avisos de uso del plan, reactivaciones y
+ * el borrado de mensajes de más de 12 meses.
+ */
 export async function runDailySummary(now = new Date()) {
   const businesses = await forPlatform(db).businessesForCron()
   const deps = deliveryDeps()
@@ -55,7 +62,9 @@ export async function runDailySummary(now = new Date()) {
       const scoped = forBusiness(db, id)
       await expireOldWaitlist(scoped, timezones.get(id)!, now)
       const result = await runHourlyForBusiness(scoped, timezones.get(id)!, now, deps.email, deps.appUrl)
-      if (result.daily || result.weekly) await flushBusiness(db, id, deps, now)
+      const billing = await runBillingHourly(scoped, timezones.get(id)!, now, deps.email, deps.appUrl)
+      if (Number(formatZoned(now, timezones.get(id)!, "H")) === PURGE_HOUR) await purgeOldMessages(scoped, now)
+      if (result.daily || result.weekly || billing.pending) await flushBusiness(db, id, deps, now)
     },
   )
 }

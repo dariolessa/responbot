@@ -54,6 +54,14 @@ export type NotificationPayloads = {
   "deposit.paid": BookingPayload & { amount: string }
   "mercadopago.disconnected": Record<string, never>
   "team.invitation_accepted": { memberName: string; roleLabel: string }
+  "billing.payment_failed": { graceEndsOn: string }
+  "billing.usage": {
+    metric: "conversations" | "templates"
+    percent: number
+    used: number
+    limit: number
+    planName: string
+  }
 }
 
 export type NotificationType = keyof NotificationPayloads
@@ -70,6 +78,8 @@ export type NotificationDefinition = {
   ignoresQuietHours?: boolean
   /** Los profesionales lo reciben si es de un turno suyo. */
   forStaff?: boolean
+  /** Solo el dueño (la facturación es suya). */
+  ownerOnly?: boolean
 }
 
 const off: Defaults = { in_app: false, push: false, whatsapp: false, email: false }
@@ -131,6 +141,18 @@ export const notificationTypes: Record<NotificationType, NotificationDefinition>
     label: "Invitación aceptada",
     channels: ["in_app"],
     defaults: () => ({ ...off, in_app: true }),
+  },
+  "billing.payment_failed": {
+    label: "Pago de suscripción fallido",
+    channels: ["in_app", "email"],
+    defaults: () => ({ ...off, in_app: true, email: true }),
+    ownerOnly: true,
+  },
+  "billing.usage": {
+    label: "Uso del plan cerca del límite",
+    channels: ["in_app", "email"],
+    defaults: () => ({ ...off, in_app: true, email: true }),
+    ownerOnly: true,
   },
 }
 
@@ -233,6 +255,26 @@ export function renderNotification<T extends NotificationType>(
         title: "Se sumó alguien al equipo",
         body: `${p.memberName} aceptó la invitación como ${p.roleLabel.toLowerCase()}.`,
         url: "/app/equipo",
+      }
+    }
+    case "billing.payment_failed": {
+      const p = payload as NotificationPayloads["billing.payment_failed"]
+      return {
+        title: "No pudimos cobrar tu suscripción",
+        body: `Actualizá la tarjeta antes del ${p.graceEndsOn}; después el panel queda en solo lectura y el bot deja de reservar.`,
+        url: "/app/facturacion",
+      }
+    }
+    case "billing.usage": {
+      const p = payload as NotificationPayloads["billing.usage"]
+      const what = p.metric === "conversations" ? "conversaciones" : "mensajes con plantilla"
+      return {
+        title: p.percent >= 100 ? `Llegaste al límite de ${what}` : `Usaste el ${p.percent} % de tus ${what}`,
+        body:
+          p.percent >= 100
+            ? `Este mes van ${p.used} de ${p.limit} del plan ${p.planName}. El bot sigue respondiendo; te conviene pasar a un plan más grande.`
+            : `Este mes van ${p.used} de ${p.limit} del plan ${p.planName}.`,
+        url: "/app/facturacion",
       }
     }
   }

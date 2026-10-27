@@ -105,6 +105,13 @@ export const templateDefinitions: TemplateDefinition[] = [
     buttons: ["Sí, quiero", "Ahora no"],
   },
   {
+    name: "pedido_resena",
+    category: "MARKETING",
+    label: "Pedido de reseña después del servicio",
+    body: "Hola {{1}}, gracias por venir a {{2}}. Si te gustó la atención, ¿nos dejás una reseña en Google? Nos ayuda muchísimo: {{3}}",
+    example: ["Lucía", "Peluquería Sol", "https://g.page/r/CTQ1MjM0NTY3ODk/review"],
+  },
+  {
     name: "resumen_diario_dueno",
     category: "UTILITY",
     label: "Resumen diario para el dueño",
@@ -145,6 +152,7 @@ export type TemplateName =
   | "sena_devuelta"
   | "lugar_tomado"
   | "reactivacion_cliente"
+  | "pedido_resena"
   | "resumen_diario_dueno"
   | "aviso_derivacion_dueno"
   | "aviso_reserva_dueno"

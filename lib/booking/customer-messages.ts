@@ -7,6 +7,7 @@ import type { BookingPayload } from "@/lib/notifications/types"
 import { formatZoned, toDateString, toTimeString } from "@/lib/time"
 
 import type { Actor } from "./create"
+import { queueReviewRequest } from "./follow-ups"
 import { isOpen, occupyingStatuses } from "./policies"
 import { offerFreedSlot } from "./waitlist"
 
@@ -144,6 +145,9 @@ export async function onBookingChange(
   if (!business) return
 
   await syncReminders(scoped, booking, now)
+
+  // Pedido de reseña al marcarlo atendido.
+  if (change.kind === "status" && booking.status === "completed") await queueReviewRequest(scoped, booking, now)
 
   // Al cliente: si el cambio lo hizo el equipo desde el panel. Si fue por WhatsApp, el bot ya se lo dijo.
   // La seña (link de pago, pago recibido y retención vencida) se avisa siempre.

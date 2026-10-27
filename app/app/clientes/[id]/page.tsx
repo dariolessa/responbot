@@ -5,8 +5,10 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 
 import { statusDotClass } from "@/components/agenda/status"
+import { UpgradeNotice } from "@/components/billing/upgrade-notice"
 import { Button } from "@/components/ui/button"
 import { getTenant } from "@/lib/auth/tenant"
+import { billingState, hasFeature } from "@/lib/billing/state"
 import { agendaAccess, bookingsVisibleWhere, canSeeCustomer } from "@/lib/booking/access"
 import { statusLabels } from "@/lib/booking/policies"
 import * as schema from "@/lib/db/schema"
@@ -40,6 +42,24 @@ export default async function ClientePage({ params }: PageProps<"/app/clientes/[
   const customer = (await tenant.db.customers.findById(id))!
   const business = (await tenant.db.business())!
   const timezone = business.timezone
+
+  // La ficha completa viene con el plan Pro o superior.
+  if (!hasFeature(billingState(business, new Date()), "customerProfiles")) {
+    return (
+      <>
+        <Link
+          href="/app/clientes"
+          className="mb-4 inline-flex h-11 items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground sm:h-auto"
+        >
+          <ArrowLeft className="size-4" />
+          Clientes
+        </Link>
+        <h1 className="mb-1 text-2xl font-semibold tracking-tight">{customer.name ?? "Cliente sin nombre"}</h1>
+        <p className="mb-8 font-mono text-sm text-muted-foreground">{formatPhone(customer.phoneE164)}</p>
+        <UpgradeNotice feature="customerProfiles" isOwner={tenant.role === "owner"} />
+      </>
+    )
+  }
 
   const bookings = await tenant.db.bookings.findMany({
     where: and(eq(schema.bookings.customerId, id), bookingsVisibleWhere(access)),

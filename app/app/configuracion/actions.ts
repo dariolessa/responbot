@@ -5,6 +5,7 @@ import { redirect } from "next/navigation"
 import { z } from "zod"
 
 import { requirePermission } from "@/lib/auth/tenant"
+import { readOnlyFailure } from "@/lib/billing/access"
 import { currencyOptions, timezoneOptions } from "@/lib/business-options"
 import { audit } from "@/lib/catalog"
 import { fail, invalid, ok, type ActionResult } from "@/lib/forms"
@@ -18,6 +19,8 @@ export async function saveRules(
   from: "onboarding" | "settings",
 ): Promise<ActionResult> {
   const tenant = await requirePermission("manageBusinessSettings")
+  const blocked = await readOnlyFailure(tenant.db)
+  if (blocked) return blocked
   const parsed = rulesInput.safeParse(values)
   if (!parsed.success) return invalid(parsed.error)
 
@@ -63,6 +66,8 @@ const businessInput = z.object({
 
 export async function saveBusiness(input: z.input<typeof businessInput>): Promise<ActionResult> {
   const tenant = await requirePermission("manageBusinessSettings")
+  const blocked = await readOnlyFailure(tenant.db)
+  if (blocked) return blocked
   const parsed = businessInput.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 

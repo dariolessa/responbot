@@ -1,6 +1,7 @@
 import { and, eq, gte, inArray, lt, ne } from "drizzle-orm"
 
 import { onboardingIncompleteEmail } from "@/emails/onboarding-incomplete"
+import { billingState, hasFeature } from "@/lib/billing/state"
 import * as schema from "@/lib/db/schema"
 import type { ScopedDb } from "@/lib/db/scoped"
 import { formatMoney } from "@/lib/money"
@@ -79,6 +80,8 @@ export async function sendWeeklySummary(scoped: ScopedDb, now: Date): Promise<bo
   const tz = business.timezone
   const today = toDateString(now, tz)
   if (weekdayOf(today) !== 1 || business.weeklySummarySentOn === today) return false
+  // El resumen semanal viene con el plan Equipo (y la prueba).
+  if (!hasFeature(billingState(business, now), "weeklySummary")) return false
   await scoped.updateBusiness({ weeklySummarySentOn: today })
 
   const weekStart = addDaysToDate(today, -7)
