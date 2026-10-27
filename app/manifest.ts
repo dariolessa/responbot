@@ -1,0 +1,28 @@
+import type { MetadataRoute } from "next"
+
+import { brand } from "@/lib/brand"
+
+/** PWA instalable (docs/SPEC.md, "Panel y agenda"): abre directo en la agenda. */
+export default function manifest(): MetadataRoute.Manifest {
+  return {
+    name: brand.name,
+    short_name: brand.name,
+    description: "Tu agenda y tu asistente de WhatsApp.",
+    lang: "es",
+    start_url: "/app/agenda",
+    scope: "/",
+    display: "standalone",
+    orientation: "portrait",
+    background_color: "#ffffff",
+    theme_color: "#ffffff",
+    icons: [
+      { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: "/icons/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+    ],
+    shortcuts: [
+      { name: "Agenda de hoy", url: "/app/agenda" },
+      { name: "Clientes", url: "/app/clientes" },
+    ],
+  }
+}

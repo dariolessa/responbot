@@ -149,8 +149,20 @@ export type ScopedDb = { readonly businessId: string } & {
   updateBusiness(
     values: Partial<Omit<typeof schema.businesses.$inferInsert, "id" | "slug">>,
   ): Promise<schema.Business | undefined>
+  /** Miembros del negocio con su nombre y email (la tabla users no es del negocio). */
+  members(): Promise<MemberWithUser[]>
   /** Corre `fn` en una transacción, con un scope del mismo negocio. */
   transaction<R>(fn: (tx: ScopedDb) => Promise<R>): Promise<R>
+}
+
+export type MemberWithUser = {
+  membershipId: string
+  userId: string
+  role: schema.Role
+  active: boolean
+  name: string | null
+  email: string | null
+  image: string | null
 }
 
 /** Acceso a datos de un negocio. Toda consulta queda filtrada por `businessId`. */
@@ -186,6 +198,23 @@ export function forBusiness(db: AnyDb, businessId: string): ScopedDb {
       return row
     },
 
+    async members() {
+      return db
+        .select({
+          membershipId: schema.memberships.id,
+          userId: schema.memberships.userId,
+          role: schema.memberships.role,
+          active: schema.memberships.active,
+          name: schema.users.name,
+          email: schema.users.email,
+          image: schema.users.image,
+        })
+        .from(schema.memberships)
+        .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
+        .where(eq(schema.memberships.businessId, businessId))
+        .orderBy(schema.memberships.createdAt)
+    },
+
     transaction<R>(fn: (tx: ScopedDb) => Promise<R>) {
       return db.transaction((tx) => fn(forBusiness(tx, businessId)))
     },
@@ -213,6 +242,8 @@ export type NewBusinessInput = {
   timezone: string
   currency: string
   trialEndsAt: Date
+  address?: string | null
+  onboardingCompleted?: string[]
 }
 
 /** Lo que pertenece a la cuenta de un usuario: membresías e invitaciones. */
@@ -309,6 +340,18 @@ export function forUser(db: AnyDb, userId: string) {
             .update(schema.invitations)
             .set({ acceptedAt: new Date() })
             .where(eq(schema.invitations.id, invitation.id))
+          // Si la invitación era para un profesional de la agenda, esa columna pasa a ser suya.
+          if (invitation.resourceId) {
+            await tx
+              .update(schema.resources)
+              .set({ userId })
+              .where(
+                and(
+                  eq(schema.resources.id, invitation.resourceId),
+                  eq(schema.resources.businessId, invitation.businessId),
+                ),
+              )
+          }
           joined.push(invitation.businessId)
         }
 

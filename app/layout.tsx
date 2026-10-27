@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 
+import { ServiceWorker } from "@/components/layout/service-worker"
 import { ThemeProvider } from "@/components/layout/theme-provider"
 import { brand } from "@/lib/brand"
 import "./globals.css"
@@ -21,6 +22,8 @@ export const metadata: Metadata = {
     template: `%s · ${brand.name}`,
   },
   description: "Tu asistente de WhatsApp que responde, cotiza y reserva turnos por vos.",
+  applicationName: brand.name,
+  appleWebApp: { capable: true, title: brand.name, statusBarStyle: "default" },
 }
 
 export const viewport: Viewport = {
@@ -41,6 +44,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           {children}
         </ThemeProvider>
+        <ServiceWorker />
       </body>
     </html>
   )

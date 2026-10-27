@@ -3,6 +3,7 @@
 import { ArrowRight, Loader2 } from "lucide-react"
 import { useActionState } from "react"
 
+import { FieldError } from "@/components/forms/field"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -10,15 +11,6 @@ import { NativeSelect } from "@/components/ui/native-select"
 import { archetypeOptions, currencyOptions, timezoneOptions } from "@/lib/business-options"
 
 import { createBusiness, type CreateBusinessState } from "./actions"
-
-function FieldError({ id, message }: { id: string; message?: string }) {
-  if (!message) return null
-  return (
-    <p id={id} className="text-sm text-destructive">
-      {message}
-    </p>
-  )
-}
 
 export function CreateBusinessForm() {
   const [state, action, pending] = useActionState<CreateBusinessState, FormData>(
@@ -57,6 +49,20 @@ export function CreateBusinessForm() {
         <FieldError id="archetype-error" message={e.archetype} />
       </div>
 
+      <div className="grid gap-2">
+        <Label htmlFor="address">Dirección (opcional)</Label>
+        <Input
+          id="address"
+          name="address"
+          placeholder="Av. 18 de Julio 1234, Montevideo"
+          defaultValue={v.address}
+          autoComplete="street-address"
+          aria-invalid={e.address ? true : undefined}
+          aria-describedby="address-error"
+        />
+        <FieldError id="address-error" message={e.address} />
+      </div>
+
       <div className="grid gap-6 sm:grid-cols-2">
         <div className="grid gap-2">
           <Label htmlFor="timezone">Zona horaria</Label>
@@ -88,7 +94,7 @@ export function CreateBusinessForm() {
 
       <Button type="submit" size="lg" disabled={pending} className="mt-2">
         {pending ? <Loader2 className="animate-spin" /> : null}
-        Crear mi negocio
+        Crear mi negocio y seguir
         {pending ? null : <ArrowRight />}
       </Button>
     </form>
