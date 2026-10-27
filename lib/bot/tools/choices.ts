@@ -11,7 +11,7 @@ import { defineTool } from "./define"
 export const showChoices = defineTool({
   name: "show_choices",
   description:
-    "Muestra opciones para que el cliente toque en vez de escribir: servicios, profesionales, horarios o una pregunta de sí o no. Aparecen como botones (hasta 3) o como lista (hasta 10) debajo de tu próxima respuesta. Usala cuando el cliente tenga que elegir entre opciones concretas que salieron de tus herramientas. En tu respuesta no repitas la lista: escribí solo la pregunta o una frase corta.",
+    "Muestra opciones para que el cliente toque en vez de escribir: servicios, profesionales, horarios o una pregunta de sí o no. Aparecen como botones (hasta 3) o como lista (hasta 10) debajo de tu próxima respuesta. Usala cuando el cliente tenga que elegir entre opciones concretas que salieron de tus herramientas. En tu respuesta no repitas la lista: escribí solo la pregunta o una frase corta. Para confirmar un turno, igual escribí servicio, profesional, día, hora y precio.",
   input: z.object({
     options: z
       .array(
@@ -42,7 +42,7 @@ export const showChoices = defineTool({
     }
     return {
       shown: true,
-      hint: "Las opciones se muestran debajo de tu respuesta. Escribí solo la pregunta, sin repetir la lista.",
+      hint: "Las opciones se muestran debajo de tu respuesta. Escribí solo la pregunta, sin repetir la lista (si es para confirmar un turno, escribí sus datos).",
     }
   },
 })
