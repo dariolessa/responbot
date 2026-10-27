@@ -20,7 +20,9 @@ import {
   UNSUPPORTED_REPLY,
   unsupportedText,
 } from "./messages"
+import { markWhatsAppBroken } from "./connection"
 import { deliverMessage, failedStatusError, shouldApplyStatus } from "./outbound"
+import { parseReminderButton, reminderReply } from "./scheduled"
 
 /*
  * Procesamiento de los eventos del webhook de WhatsApp (docs/SPEC.md,
@@ -46,14 +48,17 @@ export type WhatsAppDeps = {
 
 const DISCONNECT_EVENTS = new Set(["PARTNER_REMOVED", "ACCOUNT_DELETED"])
 
-export async function processWebhookEvents(db: AnyDb, events: WebhookEvent[], deps: WhatsAppDeps) {
+/** Procesa los eventos y devuelve los negocios tocados (para mandar después lo que haya quedado pendiente). */
+export async function processWebhookEvents(db: AnyDb, events: WebhookEvent[], deps: WhatsAppDeps): Promise<string[]> {
   const platform = forPlatform(db)
+  const touched = new Set<string>()
   for (const event of events) {
     try {
       if (event.kind === "account") {
         if (!DISCONNECT_EVENTS.has(event.event)) continue
         for (const account of await platform.whatsAppAccountsByWabaId(event.wabaId)) {
-          await forBusiness(db, account.businessId).whatsappAccounts.update(undefined, { status: "disconnected" })
+          await markWhatsAppBroken(forBusiness(db, account.businessId), "disconnected")
+          touched.add(account.businessId)
         }
         continue
       }
@@ -65,12 +70,16 @@ export async function processWebhookEvents(db: AnyDb, events: WebhookEvent[], de
       }
       const scoped = forBusiness(db, account.businessId)
       if (event.kind === "status") await applyStatus(scoped, event)
-      else await handleInbound(scoped, account, event, deps)
+      else {
+        touched.add(account.businessId)
+        await handleInbound(scoped, account, event, deps)
+      }
     } catch (error) {
       // Un evento que falla no frena a los demás; Meta no reintenta porque ya respondimos 200.
       console.error("[whatsapp] falló un evento", event.kind, error)
     }
   }
+  return [...touched]
 }
 
 async function applyStatus(scoped: ScopedDb, event: Extract<WebhookEvent, { kind: "status" }>) {
@@ -128,6 +137,7 @@ async function prepare(
   customer: schema.Customer,
   content: Extract<WebhookEvent, { kind: "message" }>["content"],
   deps: WhatsAppDeps,
+  now: Date,
 ): Promise<Prepared> {
   switch (content.type) {
     case "text": {
@@ -174,11 +184,24 @@ async function prepare(
 
     case "choice": {
       const text = choiceText(content)
+      const button = parseReminderButton(content.id)
+      if (button) {
+        const reply = await reminderReply(scoped, customer, button, content.title, now)
+        // El bot lee el pedido completo ("Quiero cancelar mi turno de…"); en la bandeja se ve el botón.
+        return { ...reply, stored: { type: "interactive", body: content.title, transcript: reply.text === content.title ? null : reply.text } }
+      }
       return { text, stored: { type: "interactive", body: text } }
     }
 
-    case "template_button":
+    case "template_button": {
+      const button = parseReminderButton(content.payload)
+      if (button) {
+        const reply = await reminderReply(scoped, customer, button, content.text, now)
+        // El bot lee el pedido completo ("Quiero cancelar mi turno de…"); en la bandeja se ve el botón.
+        return { ...reply, stored: { type: "interactive", body: content.text, transcript: reply.text === content.text ? null : reply.text } }
+      }
       return { text: content.text, stored: { type: "interactive", body: content.text } }
+    }
 
     case "unsupported": {
       const text = unsupportedText(content.what)
@@ -215,7 +238,7 @@ async function handleInbound(
     })
   }
 
-  const prepared = await prepare(scoped, api, customer, event.content, deps)
+  const prepared = await prepare(scoped, api, customer, event.content, deps, deps.now?.() ?? new Date())
 
   // Sin IA configurada, el mensaje queda para que lo responda una persona.
   if (!deps.model && !prepared.autoReply && conversation.mode === "bot") {

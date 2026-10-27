@@ -107,6 +107,8 @@ export const scheduledKindEnum = pgEnum("scheduled_kind", [
   "reactivation",
   "waitlist_offer",
   "post_service",
+  "booking_confirmation",
+  "booking_cancelled",
 ])
 export const scheduledStatusEnum = pgEnum("scheduled_status", [
   "pending",
@@ -125,6 +127,10 @@ export const users = pgTable("users", {
   email: text("email").unique(),
   emailVerified: timestamp("email_verified", { withTimezone: true, mode: "date" }),
   image: text("image"),
+  /** WhatsApp de la persona para los avisos al dueño (resumen diario, derivaciones), en E.164. */
+  phoneE164: text("phone_e164"),
+  /** Resend avisó un rebote o una queja: no se le mandan más correos de avisos. */
+  emailBouncedAt: timestamp("email_bounced_at", { withTimezone: true }),
   /** Negocio activo del selector; se usa también como "último negocio usado". */
   lastBusinessId: uuid("last_business_id").references((): AnyPgColumn => businesses.id, {
     onDelete: "set null",
@@ -197,6 +203,15 @@ export const businesses = pgTable("businesses", {
     .array()
     .notNull()
     .default(sql`'{}'::text[]`),
+  /** Día local del último resumen diario enviado (evita mandarlo dos veces si el cron se repite). */
+  dailySummarySentOn: date("daily_summary_sent_on"),
+  /** Lunes local del último resumen semanal por correo. */
+  weeklySummarySentOn: date("weekly_summary_sent_on"),
+  /** Correos de ciclo de vida ya enviados (por ejemplo onboarding_24h, onboarding_3d). */
+  lifecycleEmails: text("lifecycle_emails")
+    .array()
+    .notNull()
+    .default(sql`'{}'::text[]`),
   ...timestamps,
 })
 
@@ -253,6 +268,10 @@ export const bookingRules = pgTable(
     depositValue: integer("deposit_value").notNull().default(0),
     cancelHours: integer("cancel_hours").notNull().default(24),
     holdMinutes: integer("hold_minutes").notNull().default(15),
+    /** Horas antes del turno del primer recordatorio (con botones); nulo = no se manda. */
+    reminderFirstHours: integer("reminder_first_hours").default(24),
+    /** Horas antes del segundo recordatorio (corto, con la dirección); nulo = no se manda. */
+    reminderSecondHours: integer("reminder_second_hours").default(2),
     ...timestamps,
   },
   (t) => [
@@ -595,9 +614,13 @@ export const scheduledMessages = pgTable(
     sendAt: timestamp("send_at", { withTimezone: true }).notNull(),
     status: scheduledStatusEnum("status").notNull().default("pending"),
     attempts: integer("attempts").notNull().default(0),
+    /** Mensaje de la conversación con el que salió. */
+    messageId: uuid("message_id").references(() => messages.id, { onDelete: "set null" }),
+    /** Por qué no salió (sin WhatsApp conectado, cliente dado de baja, llegó tarde…). */
+    lastError: text("last_error"),
     ...timestamps,
   },
-  (t) => [index().on(t.status, t.sendAt), index().on(t.businessId)],
+  (t) => [index().on(t.status, t.sendAt), index().on(t.businessId), index().on(t.bookingId)],
 )
 
 // ---------------------------------------------------------------------------
@@ -620,7 +643,7 @@ export const notifications = pgTable(
     sentStatus: jsonb("sent_status").$type<Record<string, string>>().notNull().default({}),
     ...timestamps,
   },
-  (t) => [index().on(t.userId, t.createdAt), index().on(t.businessId)],
+  (t) => [index().on(t.userId, t.createdAt), index().on(t.businessId, t.createdAt)],
 )
 
 export const notificationPrefs = pgTable(
@@ -711,3 +734,6 @@ export type Conversation = typeof conversations.$inferSelect
 export type Message = typeof messages.$inferSelect
 export type BotSettings = typeof botSettings.$inferSelect
 export type WhatsAppAccount = typeof whatsappAccounts.$inferSelect
+export type ScheduledMessage = typeof scheduledMessages.$inferSelect
+export type Notification = typeof notifications.$inferSelect
+export type NotificationPrefs = typeof notificationPrefs.$inferSelect

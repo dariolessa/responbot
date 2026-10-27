@@ -4,10 +4,11 @@ import { forbidden, redirect } from "next/navigation"
 import { cache } from "react"
 
 import { auth } from "@/lib/auth"
-import { can, type Permission } from "@/lib/auth/roles"
+import { can, roleLabels, type Permission } from "@/lib/auth/roles"
 import { db } from "@/lib/db"
 import type { Role } from "@/lib/db/schema"
 import { forBusiness, forUser, type MembershipWithBusiness, type ScopedDb } from "@/lib/db/scoped"
+import { notify } from "@/lib/notifications/dispatch"
 
 export type SessionUser = {
   id: string
@@ -39,7 +40,16 @@ export const requireUser = cache(async (): Promise<SessionUser> => {
  */
 export const getMemberships = cache(async (user: SessionUser) => {
   const scope = forUser(db, user.id)
-  await scope.acceptPendingInvitations(user.email)
+  const joined = await scope.acceptPendingInvitations(user.email)
+  for (const businessId of joined) {
+    // Aviso en el panel a dueño y admins: "se sumó alguien al equipo".
+    const membership = await scope.membershipIn(businessId)
+    await notify(forBusiness(db, businessId), {
+      type: "team.invitation_accepted",
+      payload: { memberName: user.name ?? user.email, roleLabel: roleLabels[membership?.role ?? "staff"] },
+      excludeUserId: user.id,
+    }).catch((error: unknown) => console.error("[avisos] invitación aceptada", error))
+  }
   return scope.listMemberships()
 })
 

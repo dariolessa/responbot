@@ -6,6 +6,7 @@ import { Logo } from "@/components/layout/logo"
 import { ThemeToggle } from "@/components/layout/theme-toggle"
 import { UserMenu } from "@/components/layout/user-menu"
 import { getTenant } from "@/lib/auth/tenant"
+import { unreadCount } from "@/lib/notifications/inbox"
 
 /*
  * Layout del panel: barra lateral en escritorio, barra inferior en el celular
@@ -13,7 +14,8 @@ import { getTenant } from "@/lib/auth/tenant"
  * membresía; sin negocio redirige a /onboarding.
  */
 export default async function AppLayout({ children }: LayoutProps<"/app">) {
-  const { user, role, business, memberships } = await getTenant()
+  const { user, role, business, memberships, db } = await getTenant()
+  const badges = { "/app/notificaciones": await unreadCount(db, user.id) }
 
   const toSwitcher = (m: typeof business): SwitcherBusiness => ({
     businessId: m.businessId,
@@ -35,7 +37,7 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
         </div>
         <div className="px-3 pb-4">{switcher}</div>
         <div className="flex-1 overflow-y-auto px-3">
-          <SidebarNav role={role} />
+          <SidebarNav role={role} badges={badges} />
         </div>
         <div className="flex items-center justify-between border-t px-3 py-3">
           <UserMenu name={user.name} email={user.email} image={user.image} />
@@ -58,7 +60,7 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
         {children}
       </main>
 
-      <BottomNav role={role} footer={memberships.length > 1 ? switcher : undefined} />
+      <BottomNav role={role} badges={badges} footer={memberships.length > 1 ? switcher : undefined} />
     </div>
   )
 }

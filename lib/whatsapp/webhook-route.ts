@@ -6,6 +6,8 @@ import { db } from "@/lib/db"
 import { env } from "@/lib/env"
 import { parseWebhook, verifySignature, webhookPayload } from "@/lib/integrations/whatsapp/webhook"
 
+import { flushBusiness } from "@/lib/notifications/deps"
+
 import { whatsappDeps } from "./deps"
 import { processWebhookEvents } from "./inbound"
 
@@ -51,7 +53,15 @@ export async function receiveWebhook(request: Request): Promise<Response> {
 
   const events = parseWebhook(payload.data)
   if (events.length > 0) {
-    after(() => processWebhookEvents(db, events, whatsappDeps()))
+    after(async () => {
+      const touched = await processWebhookEvents(db, events, whatsappDeps())
+      // Avisos al equipo (reservas, derivaciones) que dejaron los mensajes.
+      for (const businessId of touched) {
+        await flushBusiness(db, businessId).catch((error: unknown) => {
+          console.error("[avisos] no se pudo vaciar lo pendiente", businessId, error)
+        })
+      }
+    })
   }
   return Response.json({ ok: true })
 }

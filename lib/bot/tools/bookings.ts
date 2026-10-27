@@ -237,6 +237,7 @@ export const createBookingTool = defineTool({
         source: bookingSource(ctx),
       },
       botActor(ctx),
+      { now: ctx.now },
     ).catch(translateBookingError)
 
     const names = await staffNames(ctx, [slot.resourceId])
@@ -310,6 +311,7 @@ export const rescheduleBooking = defineTool({
       ctx.scoped,
       { bookingId: booking.id, startsAt: slot.startsAt, resourceId: slot.resourceId },
       botActor(ctx),
+      { now: ctx.now },
     ).catch(translateBookingError)
 
     const [service, names] = await Promise.all([
@@ -339,6 +341,7 @@ export const cancelBookingTool = defineTool({
       ctx.scoped,
       { bookingId: booking.id, to: "cancelled", cancelReason: input.reason || "Cancelado por el cliente" },
       botActor(ctx),
+      { now: ctx.now },
     ).catch(translateBookingError)
     // El aviso a la lista de espera llega con las plantillas de WhatsApp (Fase 5).
     return {

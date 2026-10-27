@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm"
 import { z } from "zod"
 
 import * as schema from "@/lib/db/schema"
+import { notify } from "@/lib/notifications/dispatch"
 
 import { defineTool } from "./define"
 
@@ -40,25 +41,20 @@ export const handoffToHuman = defineTool({
     )
     if (conversation) ctx.conversation = conversation
 
-    // Aviso en el panel para dueño y admins. Push, WhatsApp y correo llegan con el despachador (Fase 4).
-    const members = await ctx.scoped.members()
-    const recipients = members.filter((m) => m.active && (m.role === "owner" || m.role === "admin"))
-    if (recipients.length) {
-      await ctx.scoped.notifications.insert(
-        recipients.map((m) => ({
-          userId: m.userId,
-          type: "conversation.handoff",
-          payload: {
-            conversationId: ctx.conversation.id,
-            customerId: ctx.customer.id,
-            customerName: ctx.customer.name,
-            reason: input.reason,
-            test: ctx.channel === "test_chat",
-          },
-          channels: ["in_app"],
-        })),
-      )
-    }
+    // Aviso a dueño y admins por el despachador (panel, push y WhatsApp); el chat de prueba solo avisa en el panel.
+    const test = ctx.channel === "test_chat"
+    await notify(ctx.scoped, {
+      type: "conversation.handoff",
+      payload: {
+        conversationId: ctx.conversation.id,
+        customerId: ctx.customer.id,
+        customerName: ctx.customer.name,
+        reason: input.reason,
+        test,
+      },
+      inAppOnly: test,
+      now: ctx.now,
+    })
     return {
       handed_off: true,
       hint: "Despedite en una frase: una persona del equipo le va a responder por acá.",

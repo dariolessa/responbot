@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm"
 import * as schema from "@/lib/db/schema"
 import type { ScopedDb } from "@/lib/db/scoped"
 import type { SignupResult } from "@/lib/integrations/whatsapp/signup"
+import { notify } from "@/lib/notifications/dispatch"
 import { withCompleted } from "@/lib/onboarding/steps"
 
 /*
@@ -81,4 +82,20 @@ export async function removeWhatsAppConnection(scoped: ScopedDb, actorId: string
     await scoped.updateBusiness({ onboardingCompleted: business.onboardingCompleted.filter((s) => s !== "whatsapp") })
   }
   return account
+}
+
+/**
+ * La cuenta dejó de servir (token vencido o número dado de baja). Si estaba
+ * activa, avisa a dueño y admins por panel, push y correo; si ya estaba
+ * marcada, no repite el aviso.
+ */
+export async function markWhatsAppBroken(
+  scoped: ScopedDb,
+  status: "token_expired" | "disconnected",
+  now: Date = new Date(),
+): Promise<boolean> {
+  const [changed] = await scoped.whatsappAccounts.update(eq(schema.whatsappAccounts.status, "active"), { status })
+  if (!changed) return false
+  await notify(scoped, { type: "whatsapp.disconnected", payload: { status }, now })
+  return true
 }

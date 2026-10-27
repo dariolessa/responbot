@@ -2,9 +2,10 @@ import { eq } from "drizzle-orm"
 
 import * as schema from "@/lib/db/schema"
 import type { ScopedDb } from "@/lib/db/scoped"
-import type { WhatsAppApi } from "@/lib/integrations/whatsapp/client"
+import type { OutboundPayload, WhatsAppApi } from "@/lib/integrations/whatsapp/client"
 import { GraphError } from "@/lib/integrations/whatsapp/graph"
 
+import { markWhatsAppBroken } from "./connection"
 import { toOutboundPayload } from "./messages"
 
 /*
@@ -50,9 +51,11 @@ export async function deliverMessage(
   api: WhatsAppApi,
   to: string,
   message: schema.Message,
+  /** Lo que se manda si no es el texto o las opciones del mensaje (por ejemplo, una plantilla). */
+  payload?: OutboundPayload,
 ): Promise<schema.Message> {
   try {
-    const { wamid } = await api.send(to, toOutboundPayload(message))
+    const { wamid } = await api.send(to, payload ?? toOutboundPayload(message))
     const [sent] = await scoped.messages.update(eq(schema.messages.id, message.id), {
       wamid,
       status: "sent",
@@ -67,7 +70,7 @@ export async function deliverMessage(
     })
     // Token vencido o revocado: hay que reconectar WhatsApp.
     if (error instanceof GraphError && error.tokenInvalid) {
-      await scoped.whatsappAccounts.update(undefined, { status: "token_expired" })
+      await markWhatsAppBroken(scoped, "token_expired")
     }
     return failed ?? message
   }

@@ -22,6 +22,7 @@ import {
   type Actor,
 } from "@/lib/booking/create"
 import { findSlots } from "@/lib/booking/slots"
+import { flushSoon } from "@/lib/notifications/deps"
 import * as schema from "@/lib/db/schema"
 import { dateInput, fail, invalid, ok, timeInput, type ActionResult } from "@/lib/forms"
 import { formatPhone, normalizePhone } from "@/lib/phone"
@@ -48,7 +49,9 @@ function bookingFailure(error: unknown) {
   throw error
 }
 
-function done() {
+function done(tenant?: Tenant) {
+  // Después de tocar un turno: confirmación o cancelación al cliente y avisos al equipo, sin demorar la respuesta.
+  if (tenant) flushSoon(tenant.business.businessId)
   revalidatePath("/app/agenda")
   revalidatePath("/app/clientes", "layout")
 }
@@ -194,7 +197,7 @@ export async function createBookingAction(input: CreateBookingInput): Promise<Ac
       { customerId, resourceId, serviceId, startsAt, source: "panel" },
       actor,
     )
-    done()
+    done(tenant)
     return ok({ id: booking.id })
   } catch (error) {
     return bookingFailure(error)
@@ -237,7 +240,7 @@ export async function moveBookingAction(input: z.input<typeof moveInput>): Promi
       },
       actor,
     )
-    done()
+    done(tenant)
     return ok()
   } catch (error) {
     return bookingFailure(error)
@@ -262,7 +265,7 @@ export async function changeStatusAction(input: z.input<typeof statusInput>): Pr
       { bookingId: booking.id, to: parsed.data.to, cancelReason: parsed.data.reason },
       actor,
     )
-    done()
+    done(tenant)
     return ok()
   } catch (error) {
     return bookingFailure(error)
