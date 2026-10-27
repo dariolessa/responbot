@@ -16,12 +16,13 @@ export function isAuthorizedCron(request: Request): boolean {
   return a.length === b.length && timingSafeEqual(a, b)
 }
 
-/** Respuesta común de los crons que todavía no hacen nada (Fase 0). */
-export function cronHandler(name: string) {
+/** Ruta de cron: valida el secreto, corre el trabajo y responde qué hizo. */
+export function cronHandler(name: string, work?: () => Promise<unknown>) {
   return async function GET(request: Request) {
     if (!isAuthorizedCron(request)) {
       return Response.json({ ok: false, error: "No autorizado" }, { status: 401 })
     }
-    return Response.json({ ok: true, cron: name, ranAt: new Date().toISOString() })
+    const result = work ? await work() : undefined
+    return Response.json({ ok: true, cron: name, result, ranAt: new Date().toISOString() })
   }
 }

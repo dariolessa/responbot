@@ -69,13 +69,13 @@ export async function inviteMember(
   try {
     await sendEmail({
       to: email,
-      ...invitationEmail({
+      ...(await invitationEmail({
         url,
         inviterName: user.name ?? user.email,
         businessName: tenant.business.businessName,
         roleLabel: roleLabels[input.role],
         days: INVITATION_DAYS,
-      }),
+      })),
     })
     return { sent: true }
   } catch (error) {

@@ -55,6 +55,22 @@ export const cancelHoursOptions = [
   { value: 72, label: "Hasta 72 horas antes" },
 ]
 
+/** 0 = no se manda (en la base queda nulo). */
+export const firstReminderOptions = [
+  { value: 0, label: "No mandar" },
+  { value: 12, label: "12 horas antes" },
+  { value: 24, label: "24 horas antes" },
+  { value: 48, label: "48 horas antes" },
+]
+
+export const secondReminderOptions = [
+  { value: 0, label: "No mandar" },
+  { value: 1, label: "1 hora antes" },
+  { value: 2, label: "2 horas antes" },
+  { value: 3, label: "3 horas antes" },
+  { value: 4, label: "4 horas antes" },
+]
+
 const oneOf = (options: { value: number }[], message: string) =>
   z.coerce.number().refine((v) => options.some((o) => o.value === v), { error: message })
 
@@ -65,6 +81,8 @@ export const rulesInput = z
     bufferMinutes: oneOf(bufferOptions, "Elegí el descanso entre turnos."),
     slotStepMinutes: oneOf(slotStepOptions, "Elegí cada cuánto se ofrecen horarios."),
     cancelHours: oneOf(cancelHoursOptions, "Elegí hasta cuándo se puede cancelar."),
+    reminderFirstHours: oneOf(firstReminderOptions, "Elegí cuándo va el primer recordatorio."),
+    reminderSecondHours: oneOf(secondReminderOptions, "Elegí cuándo va el segundo recordatorio."),
     depositMode: z.enum(["none", "fixed", "percent"]),
     depositValue: z.string().trim().optional(),
   })
@@ -89,7 +107,12 @@ export const rulesInput = z
       }
       depositValue = percent
     }
-    return { ...v, depositValue }
+    return {
+      ...v,
+      depositValue,
+      reminderFirstHours: v.reminderFirstHours || null,
+      reminderSecondHours: v.reminderSecondHours || null,
+    }
   })
 
 export type RulesFormValues = z.input<typeof rulesInput>
@@ -103,6 +126,8 @@ export function rulesToForm(rules: {
   cancelHours: number
   depositMode: "none" | "fixed" | "percent"
   depositValue: number
+  reminderFirstHours: number | null
+  reminderSecondHours: number | null
 }): RulesFormValues {
   return {
     minNoticeMinutes: rules.minNoticeMinutes,
@@ -110,6 +135,8 @@ export function rulesToForm(rules: {
     bufferMinutes: rules.bufferMinutes,
     slotStepMinutes: rules.slotStepMinutes,
     cancelHours: rules.cancelHours,
+    reminderFirstHours: rules.reminderFirstHours ?? 0,
+    reminderSecondHours: rules.reminderSecondHours ?? 0,
     depositMode: rules.depositMode,
     depositValue:
       rules.depositMode === "fixed"
@@ -128,4 +155,6 @@ export const defaultRules = {
   cancelHours: 24,
   depositMode: "none" as const,
   depositValue: 0,
+  reminderFirstHours: 24,
+  reminderSecondHours: 2,
 }

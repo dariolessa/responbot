@@ -4,6 +4,8 @@ import Google from "next-auth/providers/google"
 import Resend from "next-auth/providers/resend"
 
 import { magicLinkEmail } from "@/emails/magic-link"
+import { welcomeEmail } from "@/emails/welcome"
+import { publicAppUrl } from "@/lib/app-url"
 import { db } from "@/lib/db"
 import { accounts, sessions, users, verificationTokens } from "@/lib/db/schema"
 import { env } from "@/lib/env"
@@ -37,7 +39,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       maxAge: MAGIC_LINK_MINUTES * 60,
       normalizeIdentifier: (identifier) => identifier.trim().toLowerCase(),
       async sendVerificationRequest({ identifier, url }) {
-        const email = magicLinkEmail({ url, minutes: MAGIC_LINK_MINUTES })
+        const email = await magicLinkEmail({ url, minutes: MAGIC_LINK_MINUTES })
         await sendEmail({ to: identifier, ...email })
       },
     }),
@@ -46,6 +48,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn: "/login",
     verifyRequest: "/login/revisa-tu-correo",
     error: "/login",
+  },
+  events: {
+    // Correo de bienvenida en el primer ingreso (docs/SPEC.md, "Correos transaccionales").
+    async createUser({ user }) {
+      if (!user.email) return
+      try {
+        const email = await welcomeEmail({ name: user.name?.split(" ")[0] ?? null, url: `${publicAppUrl()}/onboarding` })
+        await sendEmail({ to: user.email, ...email })
+      } catch (error) {
+        console.error("[correos] no se pudo mandar la bienvenida", error)
+      }
+    },
   },
   callbacks: {
     session({ session, user }) {

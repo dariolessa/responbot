@@ -16,6 +16,19 @@ function useVisibleItems(role: Role) {
   return navItems.filter((item) => !item.permission || can(role, item.permission))
 }
 
+/** Cantidad sin leer por sección (por ahora, Notificaciones). */
+export type NavBadges = Partial<Record<string, number>>
+
+function Count({ value }: { value?: number }) {
+  if (!value) return null
+  return (
+    <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 font-mono text-[11px] leading-none text-primary-foreground">
+      {value > 99 ? "99+" : value}
+      <span className="sr-only"> sin leer</span>
+    </span>
+  )
+}
+
 function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`)
 }
@@ -24,10 +37,12 @@ function isActive(pathname: string, href: string) {
 export function SidebarNav({
   role,
   items,
+  badges = {},
   onNavigate,
 }: {
   role: Role
   items?: NavItem[]
+  badges?: NavBadges
   onNavigate?: () => void
 }) {
   const pathname = usePathname()
@@ -51,6 +66,7 @@ export function SidebarNav({
           >
             <Icon className={cn("size-4", active && "text-primary")} />
             {label}
+            <Count value={badges[href]} />
           </Link>
         )
       })}
@@ -59,13 +75,22 @@ export function SidebarNav({
 }
 
 /** Barra inferior del celular: Agenda, Conversaciones, Clientes y Más. */
-export function BottomNav({ role, footer }: { role: Role; footer?: React.ReactNode }) {
+export function BottomNav({
+  role,
+  footer,
+  badges = {},
+}: {
+  role: Role
+  footer?: React.ReactNode
+  badges?: NavBadges
+}) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const visible = useVisibleItems(role)
   const primary = visible.filter((item) => item.mobile)
   const more = visible.filter((item) => !item.mobile)
   const moreActive = more.some((item) => isActive(pathname, item.href))
+  const moreUnread = more.some((item) => badges[item.href])
 
   const tab = "flex min-h-14 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium"
 
@@ -88,7 +113,12 @@ export function BottomNav({ role, footer }: { role: Role; footer?: React.ReactNo
         })}
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger className={cn(tab, moreActive ? "text-primary" : "text-muted-foreground")}>
-            <MoreHorizontal className="size-5" />
+            <span className="relative">
+              <MoreHorizontal className="size-5" />
+              {moreUnread ? (
+                <span className="absolute -top-0.5 -right-1 size-2 rounded-full bg-primary" aria-label="Hay avisos sin leer" />
+              ) : null}
+            </span>
             Más
           </SheetTrigger>
           <SheetContent side="bottom" className="rounded-t-xl pb-[calc(env(safe-area-inset-bottom)+1rem)]">
@@ -96,7 +126,7 @@ export function BottomNav({ role, footer }: { role: Role; footer?: React.ReactNo
               <SheetTitle>Más</SheetTitle>
             </SheetHeader>
             <div className="grid gap-4 px-4">
-              <SidebarNav role={role} items={more} onNavigate={() => setOpen(false)} />
+              <SidebarNav role={role} items={more} badges={badges} onNavigate={() => setOpen(false)} />
               {footer}
             </div>
           </SheetContent>

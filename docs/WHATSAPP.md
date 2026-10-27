@@ -45,7 +45,7 @@ Para salir del modo de desarrollo, Meta pide revisar la app con los permisos `wh
 
 ## 6. Plantillas
 
-Al conectar un número, Responbot manda a revisión las siete plantillas del SPEC (recordatorio, confirmación, cancelación, lugar liberado, reactivación, resumen diario y aviso de derivación). Su estado se ve en Configuración y se pueden reenviar con "Enviar a revisión de Meta". Las usan los recordatorios y avisos de la Fase 4.
+Al conectar un número, Responbot manda a revisión las diez plantillas: las siete del SPEC (recordatorio, confirmación, cancelación, lugar liberado, reactivación, resumen diario y aviso de derivación) y tres que sumó la Fase 4 (recordatorio corto del mismo día, aviso de reserva nueva y aviso de turno cancelado o movido para el equipo). Su estado se ve en Configuración y se pueden reenviar con "Enviar a revisión de Meta": si conectaste el número antes de la Fase 4, tocá ese botón para mandar las tres nuevas. Mientras una plantilla no esté aprobada, ese mensaje solo sale si el cliente escribió en las últimas 24 horas (como texto o botones normales).
 
 ## Probar sin Meta
 

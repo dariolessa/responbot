@@ -1,3 +1,4 @@
+import type { TemplatePayload } from "./client"
 import { graphRequest, GraphError, type GraphOptions } from "./graph"
 
 /*
@@ -5,6 +6,7 @@ import { graphRequest, GraphError, type GraphOptions } from "./graph"
  * ventana de servicio solo se puede escribir con plantillas aprobadas por
  * Meta. Se envían a revisión en la WABA de cada negocio al conectar WhatsApp
  * (y desde Configuración); las usan los recordatorios y avisos de la Fase 4.
+ * Las que se suman después se mandan con "Enviar a revisión de Meta".
  */
 
 export const TEMPLATE_LANGUAGE = "es_AR"
@@ -28,6 +30,13 @@ export const templateDefinitions: TemplateDefinition[] = [
     body: "Hola {{1}}, te recordamos tu turno de {{2}} con {{3}} el {{4}} a las {{5}} en {{6}}. ¿Nos confirmás?",
     example: ["Lucía", "Corte", "Ana", "martes 3 de noviembre", "10:30", "Bulevar Artigas 1234"],
     buttons: ["Confirmo", "Reprogramar", "Cancelar"],
+  },
+  {
+    name: "recordatorio_corto",
+    category: "UTILITY",
+    label: "Recordatorio corto (el mismo día)",
+    body: "Hola {{1}}, te esperamos hoy a las {{2}} para tu turno de {{3}} en {{4}}. Si no podés venir, avisanos por acá.",
+    example: ["Lucía", "10:30", "Corte", "Bulevar Artigas 1234"],
   },
   {
     name: "confirmacion_turno",
@@ -73,7 +82,69 @@ export const templateDefinitions: TemplateDefinition[] = [
     body: "Hola {{1}}, {{2}} necesita que alguien del equipo le responda por WhatsApp. Motivo: {{3}}. Entrá a Conversaciones para atenderlo.",
     example: ["Marcela", "Lucía", "quiere hablar con una persona"],
   },
+  {
+    name: "aviso_reserva_dueno",
+    category: "UTILITY",
+    label: "Aviso de reserva nueva para el equipo",
+    body: "Hola {{1}}, hay una reserva nueva en {{2}}: {{3}} para {{4}} con {{5}}, el {{6}} a las {{7}}.",
+    example: ["Marcela", "Peluquería Sol", "Lucía", "Corte", "Ana", "martes 3 de noviembre", "10:30"],
+  },
+  {
+    name: "aviso_cambio_turno_dueno",
+    category: "UTILITY",
+    label: "Aviso de turno cancelado o movido para el equipo",
+    body: "Hola {{1}}, en {{2}} {{3}} el turno de {{4}} para {{5}} con {{6}}, del {{7}} a las {{8}}.",
+    example: ["Marcela", "Peluquería Sol", "se canceló", "Lucía", "Corte", "Ana", "martes 3 de noviembre", "10:30"],
+  },
 ]
+
+export type TemplateName =
+  | "recordatorio_turno"
+  | "recordatorio_corto"
+  | "confirmacion_turno"
+  | "turno_cancelado"
+  | "lugar_liberado"
+  | "reactivacion_cliente"
+  | "resumen_diario_dueno"
+  | "aviso_derivacion_dueno"
+  | "aviso_reserva_dueno"
+  | "aviso_cambio_turno_dueno"
+
+export function templateByName(name: TemplateName): TemplateDefinition {
+  const found = templateDefinitions.find((t) => t.name === name)
+  if (!found) throw new Error(`whatsapp: no existe la plantilla ${name}`)
+  return found
+}
+
+/** Meta no acepta variables vacías, con saltos de línea, tabulaciones ni más de 4 espacios seguidos. */
+export function templateParam(value: string | null | undefined, fallback = "-"): string {
+  const clean = (value ?? "").replace(/[\n\t\r]+/g, " ").replace(/ {2,}/g, " ").trim()
+  return (clean || fallback).slice(0, 200)
+}
+
+/** Texto de la plantilla con las variables puestas (lo que se guarda en la conversación). */
+export function fillTemplate(name: TemplateName, params: string[]): string {
+  return templateByName(name).body.replace(/\{\{(\d+)\}\}/g, (_, n: string) => templateParam(params[Number(n) - 1]))
+}
+
+/**
+ * Plantilla lista para mandar. `buttonPayloads` va en el orden de los botones
+ * de respuesta rápida: es lo que vuelve en el webhook cuando el cliente toca uno.
+ */
+export function templatePayload(name: TemplateName, params: string[], buttonPayloads: string[] = []): TemplatePayload {
+  const components: Record<string, unknown>[] = [
+    { type: "body", parameters: params.map((text) => ({ type: "text", text: templateParam(text) })) },
+  ]
+  buttonPayloads.forEach((payload, index) => {
+    components.push({
+      type: "button",
+      sub_type: "quick_reply",
+      index: String(index),
+      parameters: [{ type: "payload", payload }],
+    })
+  })
+  return { name, language: { code: TEMPLATE_LANGUAGE }, components }
+}
 
 export type TemplateStatus = "APPROVED" | "PENDING" | "REJECTED" | "PAUSED" | "DISABLED" | string
 

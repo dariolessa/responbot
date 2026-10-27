@@ -331,7 +331,9 @@ describe("cliente y derivación", () => {
     const { output } = await call("handoff_to_human", { reason: "Quiere hablar con alguien" }, context)
     expect(output.handed_off).toBe(true)
     expect(context.conversation.mode).toBe("human")
-    const [notification] = await salon.scoped.notifications.findMany()
+    const [notification] = await salon.scoped.notifications.findMany({
+      where: eq(schema.notifications.type, "conversation.handoff"),
+    })
     expect(notification).toMatchObject({ userId: salon.owner.id, type: "conversation.handoff" })
     expect(await other.scoped.notifications.count()).toBe(0)
   })

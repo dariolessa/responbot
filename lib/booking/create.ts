@@ -3,6 +3,7 @@ import { and, asc, eq, gt, inArray, isNull, lt, ne, or } from "drizzle-orm"
 import * as schema from "@/lib/db/schema"
 import type { ScopedDb } from "@/lib/db/scoped"
 
+import { onBookingChange } from "./customer-messages"
 import {
   canTransition,
   isOpen,
@@ -23,6 +24,9 @@ export type Actor = {
   id: string | null
   channel: (typeof schema.channelEnum.enumValues)[number]
 }
+
+/** Reloj inyectable (los tests y el bot usan el suyo para recordatorios y avisos). */
+export type ChangeOptions = { now?: Date }
 
 /** Error con un mensaje listo para mostrar. */
 export class BookingError extends Error {
@@ -101,6 +105,7 @@ export async function createBooking(
   scoped: ScopedDb,
   input: CreateBookingInput,
   actor: Actor,
+  options: ChangeOptions = {},
 ): Promise<schema.Booking> {
   try {
     return await scoped.transaction(async (tx) => {
@@ -139,6 +144,7 @@ export async function createBooking(
         actorId: actor.id,
         channel: actor.channel,
       })
+      await onBookingChange(tx, booking!, { kind: "created" }, actor, options.now)
       return booking!
     })
   } catch (error) {
@@ -161,6 +167,7 @@ export async function moveBooking(
   scoped: ScopedDb,
   input: MoveBookingInput,
   actor: Actor,
+  options: ChangeOptions = {},
 ): Promise<schema.Booking> {
   try {
     return await scoped.transaction(async (tx) => {
@@ -199,6 +206,7 @@ export async function moveBooking(
         actorId: actor.id,
         channel: actor.channel,
       })
+      await onBookingChange(tx, updated!, { kind: "moved", previousStartsAt: booking.startsAt }, actor, options.now)
       return updated!
     })
   } catch (error) {
@@ -213,6 +221,7 @@ export async function changeBookingStatus(
   scoped: ScopedDb,
   input: { bookingId: string; to: BookingStatus; cancelReason?: string | null },
   actor: Actor,
+  options: ChangeOptions = {},
 ): Promise<schema.Booking> {
   return scoped.transaction(async (tx) => {
     const booking = await tx.bookings.findById(input.bookingId)
@@ -242,6 +251,7 @@ export async function changeBookingStatus(
     if (input.to === "completed" || input.to === "no_show") {
       await refreshCustomerStats(tx, booking.customerId)
     }
+    await onBookingChange(tx, updated, { kind: "status", from: booking.status }, actor, options.now)
     return updated
   })
 }

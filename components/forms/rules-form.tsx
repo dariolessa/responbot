@@ -11,8 +11,10 @@ import { NativeSelect } from "@/components/ui/native-select"
 import {
   bufferOptions,
   cancelHoursOptions,
+  firstReminderOptions,
   maxDaysAheadOptions,
   minNoticeOptions,
+  secondReminderOptions,
   slotStepOptions,
   type RulesFormValues,
 } from "@/lib/rules"
@@ -60,7 +62,14 @@ export function RulesForm({
   }
 
   const select = (
-    key: "minNoticeMinutes" | "maxDaysAhead" | "bufferMinutes" | "slotStepMinutes" | "cancelHours",
+    key:
+      | "minNoticeMinutes"
+      | "maxDaysAhead"
+      | "bufferMinutes"
+      | "slotStepMinutes"
+      | "cancelHours"
+      | "reminderFirstHours"
+      | "reminderSecondHours",
     options: { value: number; label: string }[],
   ) => (
     <NativeSelect
@@ -119,6 +128,22 @@ export function RulesForm({
           className="sm:col-span-2"
         >
           {select("cancelHours", cancelHoursOptions)}
+        </Field>
+        <Field
+          label="Primer recordatorio"
+          htmlFor="reminderFirstHours"
+          hint="Por WhatsApp, con botones para confirmar, reprogramar o cancelar."
+          error={fieldErrors.reminderFirstHours}
+        >
+          {select("reminderFirstHours", firstReminderOptions)}
+        </Field>
+        <Field
+          label="Segundo recordatorio"
+          htmlFor="reminderSecondHours"
+          hint="Un mensaje corto con la dirección."
+          error={fieldErrors.reminderSecondHours}
+        >
+          {select("reminderSecondHours", secondReminderOptions)}
         </Field>
       </div>
 
