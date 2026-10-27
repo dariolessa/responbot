@@ -9,6 +9,7 @@ import { db } from "@/lib/db"
 import type { Role } from "@/lib/db/schema"
 import { forBusiness, forUser, type MembershipWithBusiness, type ScopedDb } from "@/lib/db/scoped"
 import { notify } from "@/lib/notifications/dispatch"
+import { supportBusiness } from "@/lib/support/mode"
 
 export type SessionUser = {
   id: string
@@ -24,6 +25,8 @@ export type Tenant = {
   memberships: MembershipWithBusiness[]
   /** Acceso a datos filtrado por el negocio activo. */
   db: ScopedDb
+  /** Alguien de la plataforma viendo el panel en modo soporte (lib/support/mode.ts). */
+  support: boolean
 }
 
 /** Usuario con sesión válida, o redirige a /login. */
@@ -59,6 +62,22 @@ export const getMemberships = cache(async (user: SessionUser) => {
  */
 export const getTenant = cache(async (): Promise<Tenant> => {
   const user = await requireUser()
+
+  // Modo soporte: el negocio elegido en /admin, con rol Admin, sin tocar sus membresías.
+  const target = await supportBusiness(user.email)
+  if (target) {
+    const business: MembershipWithBusiness = {
+      membershipId: "soporte",
+      role: "admin",
+      businessId: target.id,
+      businessName: target.name,
+      businessSlug: target.slug,
+      timezone: target.timezone,
+      logoUrl: target.logoUrl,
+    }
+    return { user, role: business.role, business, memberships: [business], db: forBusiness(db, target.id), support: true }
+  }
+
   const memberships = await getMemberships(user)
   if (memberships.length === 0) redirect("/onboarding")
 
@@ -76,6 +95,7 @@ export const getTenant = cache(async (): Promise<Tenant> => {
     business,
     memberships,
     db: forBusiness(db, business.businessId),
+    support: false,
   }
 })
 

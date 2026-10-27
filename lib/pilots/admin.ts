@@ -5,7 +5,10 @@ import { cache } from "react"
 
 import { requireUser, type SessionUser } from "@/lib/auth/tenant"
 import { db } from "@/lib/db"
+import { forBusiness } from "@/lib/db/scoped"
 import { env } from "@/lib/env"
+import { businessDetail, conversationThread, extendTrial, recentConversations, recentProblems, searchBusinesses } from "@/lib/support/detail"
+import { startSupport } from "@/lib/support/mode"
 
 import { isPlatformAdmin } from "./admins"
 import { createDemoBusiness } from "./demo"
@@ -43,4 +46,41 @@ export async function adminCreateDemo() {
 export async function adminReview(since: Date, now: Date = new Date()) {
   await requirePlatformAdmin()
   return reviewMarkdown(db, since, now)
+}
+
+// ---------------------------------------------------------------------------
+// Soporte (/admin/soporte): buscar negocios, ficha, problemas y conversaciones.
+// ---------------------------------------------------------------------------
+
+export async function adminSearchBusinesses(term: string, now: Date = new Date()) {
+  await requirePlatformAdmin()
+  return searchBusinesses(db, term, now)
+}
+
+export async function adminBusinessDetail(businessId: string, now: Date = new Date()) {
+  await requirePlatformAdmin()
+  const detail = await businessDetail(db, businessId, now)
+  if (!detail) return null
+  const scoped = forBusiness(db, businessId)
+  const [problems, conversations] = await Promise.all([recentProblems(scoped, now), recentConversations(scoped)])
+  return { ...detail, problems, conversations }
+}
+
+export async function adminConversation(businessId: string, conversationId: string) {
+  await requirePlatformAdmin()
+  const scoped = forBusiness(db, businessId)
+  const business = await scoped.business()
+  if (!business) return null
+  const thread = await conversationThread(scoped, conversationId)
+  return thread ? { business, ...thread } : null
+}
+
+export async function adminExtendTrial(businessId: string, days: number) {
+  const user = await requirePlatformAdmin()
+  return extendTrial(db, { businessId, days, actorId: user.id, now: new Date() })
+}
+
+export async function adminStartSupport(businessId: string) {
+  const user = await requirePlatformAdmin()
+  return startSupport({ businessId, userId: user.id, email: user.email })
 }

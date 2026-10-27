@@ -603,6 +603,46 @@ export function forPlatform(db: AnyDb) {
       return rows.filter((r) => (seen.has(r.business.id) ? false : (seen.add(r.business.id), true)))
     },
 
+    /**
+     * Soporte (/admin/soporte): ids de negocios cuyo nombre, slug, email de
+     * algún miembro o número de WhatsApp contienen `term`. Sin distinguir
+     * mayúsculas; los números se comparan solo por sus dígitos.
+     */
+    async searchBusinessIds(term: string, limit = 50): Promise<string[]> {
+      const like = `%${term.trim().toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`)}%`
+      const digits = term.replace(/\D/g, "")
+      const rows = await db
+        .selectDistinct({ id: schema.businesses.id, createdAt: schema.businesses.createdAt })
+        .from(schema.businesses)
+        .leftJoin(schema.memberships, eq(schema.memberships.businessId, schema.businesses.id))
+        .leftJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
+        .leftJoin(schema.whatsappAccounts, eq(schema.whatsappAccounts.businessId, schema.businesses.id))
+        .where(
+          or(
+            sql`lower(${schema.businesses.name}) like ${like}`,
+            sql`lower(${schema.businesses.slug}) like ${like}`,
+            sql`lower(${schema.users.email}) like ${like}`,
+            sql`lower(coalesce(${schema.users.name}, '')) like ${like}`,
+            digits.length >= 4
+              ? sql`regexp_replace(${schema.whatsappAccounts.displayPhone}, '\\D', '', 'g') like ${`%${digits}%`}`
+              : undefined,
+            /^[0-9a-f-]{36}$/i.test(term.trim()) ? eq(schema.businesses.id, term.trim()) : undefined,
+          ),
+        )
+        .orderBy(sql`${schema.businesses.createdAt} desc`)
+        .limit(limit)
+      return rows.map((r) => r.id)
+    },
+
+    /** Emails de usuarios por id (autores de la auditoría que ya no son miembros, como el equipo de la plataforma). */
+    userEmails(ids: string[]) {
+      if (ids.length === 0) return Promise.resolve([])
+      return db
+        .select({ id: schema.users.id, email: schema.users.email })
+        .from(schema.users)
+        .where(inArray(schema.users.id, ids))
+    },
+
     /** Negocios de la demo pública (cron demo-reset). */
     async demoBusinessIds(): Promise<string[]> {
       const rows = await db
