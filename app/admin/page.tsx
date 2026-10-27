@@ -6,28 +6,18 @@ import { PageHeader } from "@/components/layout/page-header"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { NativeSelect } from "@/components/ui/native-select"
-import type { BillingStatus } from "@/lib/billing/state"
 import { adminOverview } from "@/lib/pilots/admin"
 import type { PilotRow } from "@/lib/pilots/overview"
 import { formatZoned } from "@/lib/time"
 import { cn } from "@/lib/utils"
 
 import { createDemoAction, setPilotAction } from "./actions"
+import { statusLabels, statusVariant } from "./labels"
 
 export const metadata: Metadata = { title: "Pilotos" }
 export const dynamic = "force-dynamic"
 
 const TZ = "America/Montevideo"
-
-const statusLabels: Record<BillingStatus, string> = {
-  trialing: "En prueba",
-  trial_expired: "Prueba terminada",
-  active: "Pago",
-  past_due: "Pago pendiente",
-  suspended: "Suspendido",
-  canceled: "Sin plan",
-  pilot: "Piloto",
-}
 
 const periods = [7, 30] as const
 
@@ -46,12 +36,14 @@ function BusinessCard({ row, days }: { row: PilotRow; days: number }) {
     <li className="grid gap-4 rounded-[10px] border p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate font-medium">{row.name}</p>
+          <Link href={`/admin/soporte/${row.id}`} className="block truncate font-medium hover:underline">
+            {row.name}
+          </Link>
           <p className="truncate text-sm text-muted-foreground">{row.ownerEmail ?? "Sin dueño"}</p>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           {row.isDemo ? <Badge>Demo</Badge> : null}
-          <Badge variant={row.status === "trial_expired" || row.status === "suspended" ? "destructive" : "secondary"}>
+          <Badge variant={statusVariant(row.status)}>
             {statusLabels[row.status]}
           </Badge>
           <Badge variant="outline">

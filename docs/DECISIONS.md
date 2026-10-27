@@ -198,3 +198,11 @@ Decisiones que el SPEC no define, tomadas con el criterio "la opción más simpl
 | Fotos | Se usan los links originales, sin copiarlas a un almacenamiento propio. | Evita sumar Blob y costos ahora; si la foto falla, WhatsApp recibe el texto. |
 | Envío | Una ficha = un mensaje de imagen con epígrafe (hasta 1024 caracteres), antes del texto del bot; máximo 3 por respuesta. | WhatsApp no tiene tarjetas con varias fotos fuera del catálogo de Meta Commerce. |
 | Precios | Enteros en centésimos con su moneda por ficha; se muestran con símbolo (`US$`, `$`). El filtro de precio del bot solo compara fichas de la misma moneda. | En inmobiliarias conviven dólares (venta) y pesos (alquiler). |
+
+## Soporte desde /admin (2026-10-27)
+
+| Tema | Decisión | Por qué |
+| --- | --- | --- |
+| Entrar como el usuario | "Modo soporte": el admin de la plataforma ve el panel del negocio con rol Admin, sin tomar la identidad del dueño. Cookie `rb_soporte` (solo el id del negocio, httpOnly, 2 h) que `getTenant()` respeta solo si el email está en `PLATFORM_ADMIN_EMAILS`. | Lo que se hace queda a nombre de quien lo hizo; sin Facturación, transferencia ni borrado. Copiar la cookie no sirve a nadie más. |
+| Auditoría | Entrar, salir y extender la prueba se anotan en `audit_logs` del negocio (`platform.support_started`, `platform.support_ended`, `platform.trial_extended`). Si la cookie vence sola, no hay registro de salida. | Sin tabla nueva ni migración. |
+| Extender la prueba | Suma días a `trial_ends_at` desde su fin si sigue vigente, o desde hoy si ya venció. | Lo que se espera al "darle más días" a alguien. |

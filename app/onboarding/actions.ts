@@ -4,6 +4,7 @@ import { redirect } from "next/navigation"
 import { z } from "zod"
 
 import { getMemberships, requireUser } from "@/lib/auth/tenant"
+import { supportBusiness } from "@/lib/support/mode"
 import { currencyOptions, timezoneOptions, TRIAL_DAYS } from "@/lib/business-options"
 import { db } from "@/lib/db"
 import { forUser } from "@/lib/db/scoped"
@@ -53,6 +54,8 @@ export async function createBusiness(
     return { errors, values: raw }
   }
 
+  // En modo soporte no se crean negocios.
+  if (await supportBusiness(user.email)) redirect("/app/agenda")
   // Si ya pertenece a un negocio (por ejemplo, aceptó una invitación), no crea otro acá.
   const memberships = await getMemberships(user)
   if (memberships.length === 0) {

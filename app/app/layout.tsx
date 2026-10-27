@@ -3,6 +3,7 @@ import Link from "next/link"
 import { BottomNav, SidebarNav } from "@/components/layout/app-nav"
 import { BusinessSwitcher, type SwitcherBusiness } from "@/components/layout/business-switcher"
 import { Logo } from "@/components/layout/logo"
+import { SupportBanner } from "@/components/layout/support-banner"
 import { ThemeToggle } from "@/components/layout/theme-toggle"
 import { UserMenu } from "@/components/layout/user-menu"
 import { BillingBanner } from "@/components/billing/billing-banner"
@@ -19,7 +20,7 @@ import { unreadCount } from "@/lib/notifications/inbox"
  * membresía; sin negocio redirige a /onboarding.
  */
 export default async function AppLayout({ children }: LayoutProps<"/app">) {
-  const { user, role, business, memberships, db } = await getTenant()
+  const { user, role, business, memberships, db, support } = await getTenant()
   const badges = { "/app/notificaciones": await unreadCount(db, user.id) }
   const now = new Date()
   const billing = billingState((await db.business())!, now)
@@ -37,6 +38,7 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
 
   return (
     <div className="min-h-dvh md:pl-64">
+      {support ? <SupportBanner businessName={business.businessName} /> : null}
       {/* Escritorio */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r bg-sidebar md:flex">
         <div className="flex h-16 items-center px-5">
