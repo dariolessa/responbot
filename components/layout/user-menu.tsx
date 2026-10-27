@@ -1,6 +1,7 @@
 "use client"
 
-import { LogOut } from "lucide-react"
+import { FlaskConical, LogOut } from "lucide-react"
+import Link from "next/link"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -26,10 +27,13 @@ export function UserMenu({
   name,
   email,
   image,
+  platformAdmin = false,
 }: {
   name: string | null
   email: string
   image: string | null
+  /** Muestra el acceso al panel de la plataforma (pilotos y demo). */
+  platformAdmin?: boolean
 }) {
   return (
     <DropdownMenu>
@@ -48,6 +52,14 @@ export function UserMenu({
           <p className="truncate text-xs text-muted-foreground">{email}</p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        {platformAdmin ? (
+          <DropdownMenuItem asChild>
+            <Link href="/admin">
+              <FlaskConical />
+              Pilotos
+            </Link>
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem onSelect={() => void signOutAction()}>
           <LogOut />
           Cerrar sesión

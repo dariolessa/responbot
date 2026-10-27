@@ -6,7 +6,8 @@ import { cn } from "@/lib/utils"
 
 /*
  * Aviso arriba del panel cuando la cuenta necesita algo: prueba por terminar o
- * terminada, pago fallido, suscripción terminada o límite del mes alcanzado.
+ * terminada, piloto por terminar, pago fallido, suscripción terminada o
+ * límite del mes alcanzado.
  * El dueño ve el botón a Facturación; el resto, a quién pedírselo.
  */
 
@@ -31,6 +32,18 @@ function message(state: BillingState, overLimit: boolean): { text: string; warn:
       return { text: "Suscripción impaga: el bot no toma reservas y el panel está en solo lectura.", warn: true }
     case "canceled":
       return { text: "Tu suscripción terminó: el bot no toma reservas y el panel está en solo lectura.", warn: true }
+    case "pilot": {
+      if (!state.pilotEndsAt) break
+      const days = Math.floor((state.pilotEndsAt.getTime() - Date.now()) / 86_400_000)
+      if (days > 7) break
+      return {
+        text:
+          days <= 0
+            ? "Tu período de piloto termina hoy. Elegí un plan para que el bot siga reservando."
+            : `Tu período de piloto termina en ${days} ${days === 1 ? "día" : "días"}. Elegí un plan para seguir sin cortes.`,
+        warn: false,
+      }
+    }
   }
   if (overLimit) return { text: "Llegaste al límite de conversaciones del mes. El bot sigue respondiendo.", warn: false }
   return null

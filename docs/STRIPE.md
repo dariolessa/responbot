@@ -82,7 +82,7 @@ Hay una plantilla nueva, `pedido_resena` (marketing). `reactivacion_cliente` ya 
 
 ## Mientras Stripe no esté
 
-Sin las variables, nadie puede elegir plan: un negocio cuya prueba vence queda sin reservas. Para los pilotos (Fase 7), alargale la prueba desde la base: `update businesses set trial_ends_at = '2027-03-01' where slug = '…';`, o dale un plan a mano: `update businesses set plan = 'pro', subscription_status = 'active' where slug = '…';`.
+Sin las variables, nadie puede elegir plan: un negocio cuya prueba vence queda sin reservas. Para los pilotos (Fase 7), marcalo como piloto desde `/admin` (todo habilitado sin cobro hasta la fecha que elijas; ver [PILOTOS.md](PILOTOS.md)). Si hiciera falta a mano: `update businesses set plan = 'pro', subscription_status = 'active' where slug = '…';`.
 
 ## Qué queda para después
 

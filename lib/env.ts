@@ -57,6 +57,9 @@ const serverSchema = z.object({
   VAPID_PRIVATE_KEY: optional,
   VAPID_SUBJECT: optional,
 
+  // Pilotos y demo (Fase 7): emails (separados por coma) que entran a /admin.
+  PLATFORM_ADMIN_EMAILS: optional,
+
   // Seguridad
   ENCRYPTION_KEY: z
     .string()

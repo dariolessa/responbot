@@ -62,6 +62,13 @@ function statusLine(state: BillingState, business: Business): { badge: string; t
         text: "No pudimos cobrar la suscripción: el bot no reserva y el panel quedó en solo lectura. Actualizá la tarjeta para seguir.",
         tone: "warn",
       }
+    case "pilot":
+      return {
+        badge: "Piloto",
+        text: state.pilotEndsAt
+          ? `Sos parte de los negocios piloto: tenés todo habilitado sin cargo hasta el ${day(state.pilotEndsAt)}. Si elegís un plan ahora, se empieza a cobrar cuando termina.`
+          : "Este es un negocio de demostración: tiene todo habilitado y no se cobra.",
+      }
     case "canceled":
       return {
         badge: "Sin plan",

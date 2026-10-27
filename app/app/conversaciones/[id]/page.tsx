@@ -6,6 +6,7 @@ import { notFound } from "next/navigation"
 import { ThreadView } from "@/components/conversations/thread-view"
 import { LiveRefresh } from "@/components/layout/live-refresh"
 import { Button } from "@/components/ui/button"
+import { can } from "@/lib/auth/roles"
 import { requirePermission } from "@/lib/auth/tenant"
 import { loadThread } from "@/lib/whatsapp/inbox"
 import { markConversationRead } from "@/lib/whatsapp/panel"
@@ -37,6 +38,7 @@ export default async function ConversacionPage({ params }: PageProps<"/app/conve
         thread={thread}
         timezone={tenant.business.timezone}
         connected={account?.status === "active"}
+        canRate={can(tenant.role, "manageBot")}
       />
     </>
   )

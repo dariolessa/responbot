@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm"
 
 import type { MessageTrace } from "@/lib/bot/engine"
+import { ratingsFor, type BotRating } from "@/lib/bot/feedback"
 import {
   agendaAccess,
   conversationsVisibleWhere,
@@ -92,6 +93,8 @@ export type ThreadMessage = {
   choices: string[]
   /** "bot", el nombre de quien respondió desde el panel, o null si es del cliente. */
   author: string | null
+  /** Opinión del equipo sobre una respuesta del bot. */
+  rating: { value: BotRating; note: string | null } | null
 }
 
 export type Thread = {
@@ -130,6 +133,10 @@ export async function loadThread(tenant: InboxTenant, conversationId: string, no
     tenant.db.members(),
   ])
   const memberName = new Map(members.map((m) => [m.userId, m.name ?? m.email ?? "Equipo"]))
+  const ratings = await ratingsFor(
+    tenant.db,
+    recent.filter((m) => m.direction === "outbound" && !m.sentBy).map((m) => m.id),
+  )
 
   const messages = recent.reverse().map((m): ThreadMessage => {
     const trace = m.toolTrace as MessageTrace | null
@@ -146,6 +153,7 @@ export async function loadThread(tenant: InboxTenant, conversationId: string, no
       choices: m.choices?.options.map((o) => o.title) ?? [],
       author:
         m.direction === "inbound" ? null : m.sentBy ? (memberName.get(m.sentBy) ?? "Equipo") : "bot",
+      rating: ratings.has(m.id) ? { value: ratings.get(m.id)!.rating, note: ratings.get(m.id)!.note } : null,
     }
   })
 

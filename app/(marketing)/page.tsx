@@ -22,7 +22,7 @@ import { faq, Pricing } from "@/components/marketing/pricing"
 import { SiteFooter, SiteHeader } from "@/components/marketing/site-chrome"
 import { Button } from "@/components/ui/button"
 import { TRIAL_DAYS } from "@/lib/billing/plans"
-import { brand } from "@/lib/brand"
+import { brand, demoWhatsAppUrl } from "@/lib/brand"
 
 export const metadata: Metadata = {
   title: { absolute: `${brand.name} · Tu WhatsApp reserva turnos por vos` },
@@ -60,6 +60,7 @@ const features: { icon: LucideIcon; title: string; text: string }[] = [
 ]
 
 export default function HomePage() {
+  const demoUrl = demoWhatsAppUrl()
   return (
     <div className="flex min-h-dvh flex-col">
       <SiteHeader />
@@ -82,8 +83,19 @@ export default function HomePage() {
                   <ArrowRight />
                 </Link>
               </Button>
-              <span className="text-sm text-muted-foreground">Sin tarjeta. Configurás todo en minutos.</span>
+              {demoUrl ? (
+                <Button asChild size="lg" variant="outline">
+                  <a href={demoUrl} target="_blank" rel="noopener noreferrer">
+                    <MessageCircle />
+                    Probá la demo en WhatsApp
+                  </a>
+                </Button>
+              ) : null}
             </div>
+            <p className="mt-3 text-sm text-muted-foreground">
+              Sin tarjeta. Configurás todo en minutos.
+              {demoUrl ? " La demo es una barbería de prueba: pedile un turno como si fueras cliente." : ""}
+            </p>
           </div>
           <ChatMock />
         </section>

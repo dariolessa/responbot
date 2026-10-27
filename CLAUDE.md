@@ -6,7 +6,7 @@
 
 ## Producto
 
-SaaS multi-negocio "Responbot" (en el SPEC figura como "Agendabot", nombre provisorio; la marca vive en `lib/brand.ts`): un asistente de WhatsApp que responde consultas, cotiza servicios con precio fijo y reserva turnos, más un panel web con agenda para el dueño y su equipo. El MVP apunta a servicios con turno (peluquerías, barberías, uñas, estética), Uruguay primero. Estado actual: Fases 0 (base), 1 (agenda sin bot), 2 (bot en el chat de prueba del panel), 3 (WhatsApp real), 4 (recordatorios y notificaciones), 5 (señas con Mercado Pago y lista de espera) y 6 (Stripe, planes y límites, landing, estadísticas, reactivación y reseñas) terminadas; sigue la Fase 7 (pilotos). Cómo configurar Meta: [docs/WHATSAPP.md](docs/WHATSAPP.md); push, Resend y avisos: [docs/NOTIFICACIONES.md](docs/NOTIFICACIONES.md); Mercado Pago: [docs/MERCADOPAGO.md](docs/MERCADOPAGO.md); Stripe y planes: [docs/STRIPE.md](docs/STRIPE.md).
+SaaS multi-negocio "Responbot" (en el SPEC figura como "Agendabot", nombre provisorio; la marca vive en `lib/brand.ts`): un asistente de WhatsApp que responde consultas, cotiza servicios con precio fijo y reserva turnos, más un panel web con agenda para el dueño y su equipo. El MVP apunta a servicios con turno (peluquerías, barberías, uñas, estética), Uruguay primero. Estado actual: Fases 0 (base), 1 (agenda sin bot), 2 (bot en el chat de prueba del panel), 3 (WhatsApp real), 4 (recordatorios y notificaciones), 5 (señas con Mercado Pago y lista de espera), 6 (Stripe, planes y límites, landing, estadísticas, reactivación y reseñas) y 7 (herramientas para pilotos: estado piloto, calificar respuestas del bot, panel `/admin`, demo pública) terminadas en código; los pilotos en sí los lleva Dario con [docs/PILOTOS.md](docs/PILOTOS.md). Cómo configurar Meta: [docs/WHATSAPP.md](docs/WHATSAPP.md); push, Resend y avisos: [docs/NOTIFICACIONES.md](docs/NOTIFICACIONES.md); Mercado Pago: [docs/MERCADOPAGO.md](docs/MERCADOPAGO.md); Stripe y planes: [docs/STRIPE.md](docs/STRIPE.md).
 
 ## Stack
 
@@ -61,8 +61,9 @@ SaaS multi-negocio "Responbot" (en el SPEC figura como "Agendabot", nombre provi
 - `lib/booking/follow-ups.ts`: reactivación de clientes y pedido de reseñas (encolan en `scheduled_messages`). `lib/stats.ts`: estadísticas del mes. `lib/privacy.ts`: borrado de mensajes viejos.
 - `app/(marketing)/`: landing, precios, términos, privacidad (`components/marketing/`). `components/billing/`: tarjetas de planes, medidor de uso, aviso del panel y "viene con el plan…".
 - `lib/booking/waitlist.ts`: lista de espera (oferta del lugar liberado desde `onBookingChange`, botón "Lo quiero" → `acceptWaitlistOffer`, "ya fue tomado" al resto).
+- `lib/pilots/`: Fase 7. `overview.ts` (estado y números de cada negocio, marcar piloto), `review.ts` (revisión del bot en Markdown), `demo.ts` (crear y borrar la demo), `admins.ts` (`PLATFORM_ADMIN_EMAILS`), `admin.ts` (`requirePlatformAdmin` y lo que usan las pantallas de `app/admin/`). `lib/bot/feedback.ts`: calificaciones Bien/Mal de las respuestas del bot.
 - `emails/`: React Email (`layout.tsx` base, `render.ts`).
-- `lib/crypto.ts`: AES-256-GCM para tokens. `lib/db/scoped.ts` → `forPlatform` para las únicas búsquedas entre negocios (webhook y crons).
+- `lib/crypto.ts`: AES-256-GCM para tokens. `lib/db/scoped.ts` → `forPlatform` para las únicas búsquedas entre negocios (webhooks, crons y `/admin`).
 - `lib/catalog.ts` (servicios, profesionales, horarios), `lib/onboarding/` (plantillas y pasos), `lib/forms.ts` (esquemas Zod y `ActionResult`), `lib/time.ts`, `lib/money.ts`, `lib/phone.ts`.
 - `components/chat/test-chat.tsx` (chat de prueba de `/app/bot`), `components/conversations/thread-view.tsx` (hilo de la bandeja), `components/whatsapp/connect-button.tsx` (alta embebida).
 - `components/agenda/` (vistas Día, Semana y Lista, hojas de turno y bloqueo), `components/forms/`.
