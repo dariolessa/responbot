@@ -25,6 +25,8 @@ export type ToolContext = {
   now: Date
   /** false si el negocio no puede tomar reservas (prueba vencida): solo consultas. */
   canBook: boolean
+  /** Opciones para tocar que acompañan la respuesta (herramienta show_choices). */
+  choices: schema.MessageChoices | null
 }
 
 /** Error que se devuelve al modelo como resultado de la herramienta (is_error). */

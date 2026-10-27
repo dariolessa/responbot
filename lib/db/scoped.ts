@@ -385,3 +385,38 @@ export function forUser(db: AnyDb, userId: string) {
 }
 
 export type UserScope = ReturnType<typeof forUser>
+
+// ---------------------------------------------------------------------------
+// Plataforma (webhooks y crons)
+// ---------------------------------------------------------------------------
+
+/**
+ * Las únicas búsquedas entre negocios: un evento de Meta trae el
+ * phone_number_id (o el waba_id) y hay que saber de qué negocio es antes de
+ * tener un scope; el cron de tokens recorre todas las cuentas conectadas.
+ * Devuelven la cuenta con su business_id; todo lo demás se hace con
+ * `forBusiness`.
+ */
+export function forPlatform(db: AnyDb) {
+  return {
+    async whatsAppAccountByPhoneNumberId(phoneNumberId: string) {
+      const [row] = await db
+        .select()
+        .from(schema.whatsappAccounts)
+        .where(eq(schema.whatsappAccounts.phoneNumberId, phoneNumberId))
+        .limit(1)
+      return row
+    },
+
+    whatsAppAccountsByWabaId(wabaId: string) {
+      return db.select().from(schema.whatsappAccounts).where(eq(schema.whatsappAccounts.wabaId, wabaId))
+    },
+
+    activeWhatsAppAccounts() {
+      return db
+        .select()
+        .from(schema.whatsappAccounts)
+        .where(eq(schema.whatsappAccounts.status, "active"))
+    },
+  }
+}

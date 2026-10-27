@@ -83,8 +83,8 @@ describe("horario semanal", () => {
 
 describe("pasos del alta", () => {
   it("lista los pendientes disponibles y sigue al próximo", () => {
-    expect(pendingSteps(["business"]).map((s) => s.key)).toEqual(["services", "team", "rules", "test_bot"])
-    expect(pendingSteps(["business", "services", "team", "rules", "test_bot"])).toEqual([])
+    expect(pendingSteps(["business"]).map((s) => s.key)).toEqual(["services", "team", "rules", "whatsapp", "test_bot"])
+    expect(pendingSteps(["business", "services", "team", "rules", "whatsapp", "test_bot"])).toEqual([])
     expect(nextStepHref("services")).toBe("/onboarding/equipo")
     expect(nextStepHref("rules")).toBe("/onboarding/listo")
     expect(withCompleted(["business"], "business")).toEqual(["business"])

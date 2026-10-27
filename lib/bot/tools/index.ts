@@ -7,10 +7,14 @@ import {
   rescheduleBooking,
 } from "./bookings"
 import { getBusinessInfo, listServices, listStaff } from "./catalog"
+import { showChoices } from "./choices"
 import { handoffToHuman, saveCustomerName } from "./customer"
 import { toApiTool, ToolError, type BotTool, type ToolContext } from "./define"
 
-/** Las once herramientas del SPEC, en un orden fijo (el orden forma parte del prefijo cacheado). */
+/**
+ * Las once herramientas del SPEC más show_choices (mensajes interactivos), en
+ * un orden fijo: el orden forma parte del prefijo cacheado.
+ */
 export const botTools: BotTool[] = [
   listServices,
   listStaff,
@@ -23,6 +27,7 @@ export const botTools: BotTool[] = [
   getBusinessInfo,
   saveCustomerName,
   handoffToHuman,
+  showChoices,
 ] as BotTool[]
 
 export const apiTools = botTools.map(toApiTool)

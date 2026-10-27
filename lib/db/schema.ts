@@ -488,6 +488,10 @@ export const whatsappAccounts = pgTable("whatsapp_accounts", {
   phoneNumberId: text("phone_number_id").notNull().unique(),
   displayPhone: text("display_phone").notNull(),
   accessTokenEnc: text("access_token_enc").notNull(),
+  /** Nombre verificado del negocio en WhatsApp (lo que ve el cliente). */
+  verifiedName: text("verified_name"),
+  /** PIN de verificación en dos pasos con el que se registró el número, cifrado. */
+  pinEnc: text("pin_enc"),
   status: connectionStatusEnum("status").notNull().default("active"),
   ...timestamps,
 })
@@ -521,10 +525,20 @@ export const conversations = pgTable(
     lastInboundAt: timestamp("last_inbound_at", { withTimezone: true }),
     lockedUntil: timestamp("locked_until", { withTimezone: true }),
     unreadCount: integer("unread_count").notNull().default(0),
+    /** Último mensaje (de cualquier lado), para ordenar la bandeja y mostrar un adelanto. */
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true }),
+    lastMessagePreview: text("last_message_preview"),
     ...timestamps,
   },
-  (t) => [uniqueIndex().on(t.businessId, t.customerId)],
+  (t) => [uniqueIndex().on(t.businessId, t.customerId), index().on(t.businessId, t.lastMessageAt)],
 )
+
+/** Opciones que el bot ofrece como botones o lista de WhatsApp (herramienta show_choices). */
+export type MessageChoices = {
+  /** Texto del botón que abre la lista (solo listas). */
+  button?: string
+  options: { id: string; title: string; description?: string }[]
+}
 
 export const messages = pgTable(
   "messages",
@@ -540,9 +554,17 @@ export const messages = pgTable(
     type: messageTypeEnum("type").notNull().default("text"),
     body: text("body"),
     mediaUrl: text("media_url"),
+    /** Id del medio en WhatsApp (audios e imágenes); el archivo no se guarda. */
+    mediaId: text("media_id"),
     transcript: text("transcript"),
     status: messageStatusEnum("status").notNull(),
     toolTrace: jsonb("tool_trace"),
+    /** Botones o lista que acompañan una respuesta del bot. */
+    choices: jsonb("choices").$type<MessageChoices>(),
+    /** Persona del equipo que lo mandó desde el panel (nulo = el bot o el cliente). */
+    sentBy: uuid("sent_by").references(() => users.id, { onDelete: "set null" }),
+    /** Motivo si WhatsApp no lo pudo entregar. */
+    error: text("error"),
     ...timestamps,
   },
   (t) => [index().on(t.conversationId, t.createdAt)],
@@ -688,3 +710,4 @@ export type Invitation = typeof invitations.$inferSelect
 export type Conversation = typeof conversations.$inferSelect
 export type Message = typeof messages.$inferSelect
 export type BotSettings = typeof botSettings.$inferSelect
+export type WhatsAppAccount = typeof whatsappAccounts.$inferSelect

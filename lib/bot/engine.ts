@@ -39,7 +39,14 @@ export const FALLBACK_REPLY =
 export const DEFAULT_OFF_HOURS_MESSAGE =
   "¡Hola! Ahora estamos fuera de horario. Te respondemos apenas volvamos."
 
-export type EngineStatus = "replied" | "human" | "rate_limited" | "busy" | "off_hours" | "duplicate"
+export type EngineStatus =
+  | "replied"
+  | "human"
+  | "rate_limited"
+  | "busy"
+  | "off_hours"
+  | "duplicate"
+  | "auto_reply"
 
 export type EngineResult = {
   status: EngineStatus
@@ -50,11 +57,23 @@ export type EngineResult = {
 export type HandleMessageInput = {
   scoped: ScopedDb
   conversationId: string
+  /** Lo que el bot "lee": el texto, la transcripción del audio o la descripción de la imagen. */
   text: string
   channel: BotChannel
   model: BotModel
   /** Id de WhatsApp del mensaje (idempotencia). */
   wamid?: string
+  /** Cómo se guarda el mensaje entrante si no es texto (audio, imagen, opción elegida). */
+  stored?: {
+    type: schema.Message["type"]
+    body: string | null
+    transcript?: string | null
+    mediaId?: string | null
+  }
+  /** Respuesta fija sin llamar a la IA (baja de avisos, audio demasiado largo…). */
+  autoReply?: string
+  /** Se llama con cada respuesta guardada, para enviarla por WhatsApp apenas está lista. */
+  onReply?: (message: schema.Message) => Promise<void>
   /** Reloj inyectable para los tests. */
   now?: () => Date
 }
@@ -67,6 +86,14 @@ export type MessageTrace = {
   tools: ToolTraceEntry[]
   usage: { input: number; output: number; cacheRead: number; cacheWrite: number }
   error?: string
+}
+
+/** Adelanto de la bandeja de conversaciones. */
+export function previewOf(message: Pick<schema.Message, "body" | "transcript" | "type">): string {
+  const text = (message.transcript ?? message.body ?? "").replace(/\s+/g, " ").trim()
+  if (message.type === "audio") return `Audio: ${text}`.slice(0, 120)
+  if (message.type === "image") return (text ? `Imagen: ${text}` : "Imagen").slice(0, 120)
+  return text.slice(0, 120)
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -96,8 +123,10 @@ export async function handleIncomingMessage(input: HandleMessageInput): Promise<
       conversationId: conversation.id,
       direction: "inbound",
       wamid: input.wamid ?? null,
-      type: "text",
-      body: input.text,
+      type: input.stored?.type ?? "text",
+      body: input.stored ? input.stored.body : input.text,
+      transcript: input.stored?.transcript ?? null,
+      mediaId: input.stored?.mediaId ?? null,
       status: "received",
       // Con el reloj del motor: el candado, el límite y el orden del historial usan el mismo.
       createdAt: now,
@@ -111,6 +140,8 @@ export async function handleIncomingMessage(input: HandleMessageInput): Promise<
     conversation.lastInboundAt && now.getTime() - conversation.lastInboundAt.getTime() < 24 * 3_600_000
   await scoped.conversations.update(eq(schema.conversations.id, conversation.id), {
     lastInboundAt: now,
+    lastMessageAt: now,
+    lastMessagePreview: previewOf(inbound),
     unreadCount: conversation.mode === "human" ? conversation.unreadCount + 1 : conversation.unreadCount,
   })
   // Una conversación facturable = una ventana de 24 horas abierta por el cliente. El chat de prueba no cuenta.
@@ -131,6 +162,12 @@ export async function handleIncomingMessage(input: HandleMessageInput): Promise<
   )
   if (recent > RATE_LIMIT_PER_MINUTE) return { status: "rate_limited", inbound, replies: [] }
 
+  // Respuesta fija, sin IA.
+  if (input.autoReply) {
+    const reply = await saveReply(input, { text: input.autoReply, trace: null, at: clock() })
+    return { status: "auto_reply", inbound, replies: [reply] }
+  }
+
   // 4. Horario de respuesta.
   const settings = await scoped.botSettings.findFirst()
   if (settings?.replyHours === "business_hours") {
@@ -149,7 +186,7 @@ export async function handleIncomingMessage(input: HandleMessageInput): Promise<
         ),
       )
       if (alreadyTold) return { status: "off_hours", inbound, replies: [] }
-      const reply = await saveReply(scoped, conversation.id, input.channel, { text, trace: null, at: clock() })
+      const reply = await saveReply(input, { text, trace: null, at: clock() })
       return { status: "off_hours", inbound, replies: [reply] }
     }
   }
@@ -266,6 +303,7 @@ async function runTurn(
     channel: input.channel,
     now,
     canBook,
+    choices: null,
   }
 
   const trace: MessageTrace = {
@@ -338,7 +376,9 @@ async function runTurn(
       : FALLBACK_REPLY
   }
 
-  const message = await saveReply(scoped, conversation.id, input.channel, { text, trace, at: input.clock() })
+  // Al derivar no quedan opciones colgando: ya no responde el bot.
+  const choices = humanMode ? null : ctx.choices
+  const message = await saveReply(input, { text, trace, choices, at: input.clock() })
   await addUsage(scoped, usagePeriod(now, business.timezone), {
     aiInputTokens: trace.usage.input + trace.usage.cacheRead + trace.usage.cacheWrite,
     aiOutputTokens: trace.usage.output,
@@ -347,20 +387,32 @@ async function runTurn(
 }
 
 async function saveReply(
-  scoped: ScopedDb,
-  conversationId: string,
-  channel: BotChannel,
-  reply: { text: string; trace: MessageTrace | null; at: Date },
+  input: Pick<HandleMessageInput, "scoped" | "conversationId" | "channel" | "onReply">,
+  reply: { text: string; trace: MessageTrace | null; choices?: schema.MessageChoices | null; at: Date },
 ): Promise<schema.Message> {
+  const { scoped, conversationId, channel } = input
   const [message] = await scoped.messages.insert({
     conversationId,
     direction: "outbound",
-    type: "text",
+    type: reply.choices ? "interactive" : "text",
     body: reply.text,
-    // En WhatsApp lo envía la integración (Fase 3); en el chat de prueba ya se "entregó".
+    choices: reply.choices ?? null,
+    // En WhatsApp queda en cola hasta que lo envía lib/whatsapp; en el chat de prueba ya se "entregó".
     status: channel === "whatsapp" ? "queued" : "sent",
     toolTrace: reply.trace,
     createdAt: reply.at,
   })
+  await scoped.conversations.update(eq(schema.conversations.id, conversationId), {
+    lastMessageAt: reply.at,
+    lastMessagePreview: previewOf(message!),
+  })
+  if (input.onReply) {
+    try {
+      await input.onReply(message!)
+    } catch (error) {
+      // El envío marca el mensaje como fallido; el motor sigue.
+      console.error("[bot] falló el envío de la respuesta", error)
+    }
+  }
   return message!
 }

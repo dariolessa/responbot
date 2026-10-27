@@ -78,6 +78,8 @@ export type ChatMessage = {
   /** Herramientas que usó el bot para esa respuesta, para que el dueño vea qué consultó. */
   tools: { name: string; ok: boolean }[]
   failed: boolean
+  /** Opciones para tocar (show_choices); en WhatsApp salen como botones o lista. */
+  choices: { title: string; description?: string }[]
 }
 
 export type ChatState = { messages: ChatMessage[]; humanMode: boolean }
@@ -91,6 +93,7 @@ function toChatMessage(m: schema.Message): ChatMessage {
     at: m.createdAt.toISOString(),
     tools: trace?.tools.map((t) => ({ name: t.name, ok: t.ok })) ?? [],
     failed: Boolean(trace?.error),
+    choices: m.choices?.options.map((o) => ({ title: o.title, description: o.description })) ?? [],
   }
 }
 

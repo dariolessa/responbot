@@ -62,8 +62,8 @@ export const steps: Step[] = [
     number: 5,
     title: "Conectar WhatsApp",
     description: "Tu número para que el bot responda.",
-    href: "/app/configuracion",
-    available: false,
+    href: "/app/configuracion#whatsapp",
+    available: true,
   },
   {
     key: "mercadopago",
