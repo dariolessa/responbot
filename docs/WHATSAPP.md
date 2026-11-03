@@ -21,7 +21,7 @@ Mientras falten estas variables, el panel muestra WhatsApp como "Muy pronto" y e
 
 1. En **WhatsApp → Configuración**, URL de devolución de llamada: `https://<dominio>/api/webhooks/whatsapp`.
 2. Token de verificación: una frase larga que elijas vos; es `WHATSAPP_VERIFY_TOKEN`.
-3. Suscribí los campos **messages** y **account_update**.
+3. Suscribí los campos **messages**, **account_update** y, para la coexistencia (sección 7), **smb_message_echoes**, **history** y **smb_app_state_sync**. Sin esos tres un número compartido con la app funciona igual, pero el bot no se entera cuando el dueño responde desde el celular y le pisa la charla.
 
 Cada negocio que se conecta suscribe la app a su propia cuenta de WhatsApp Business automáticamente; no hay que hacer nada por negocio.
 
@@ -47,10 +47,42 @@ Para salir del modo de desarrollo, Meta pide revisar la app con los permisos `wh
 
 Al conectar un número, Responbot manda a revisión las diez plantillas: las siete del SPEC (recordatorio, confirmación, cancelación, lugar liberado, reactivación, resumen diario y aviso de derivación) y tres que sumó la Fase 4 (recordatorio corto del mismo día, aviso de reserva nueva y aviso de turno cancelado o movido para el equipo). Su estado se ve en Configuración y se pueden reenviar con "Enviar a revisión de Meta": si conectaste el número antes de la Fase 4, tocá ese botón para mandar las tres nuevas. Mientras una plantilla no esté aprobada, ese mensaje solo sale si el cliente escribió en las últimas 24 horas (como texto o botones normales).
 
+## 7. Mismo número en el celular (coexistencia)
+
+Meta deja que un número siga andando en la **app WhatsApp Business** del celular y, a la vez, en Cloud API. En Configuración → Conexiones → WhatsApp el dueño elige:
+
+- **Mi número de WhatsApp Business**: coexistencia. El alta embebida se abre con `featureType: "whatsapp_business_app_onboarding"`; el dueño escanea un código QR desde la app y Meta termina con el evento `FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING`.
+- **Un número nuevo solo para el bot**: el alta de siempre. El número deja de poder usarse en la app.
+
+### Qué hace Responbot
+
+- **No registra el número** con PIN (`/register`): en coexistencia Meta no lo permite. Si el popup no trae el `phone_number_id`, se busca en `GET /<waba_id>/phone_numbers`.
+- Apenas se conecta, pide a Meta **los contactos y el historial** de la app (`POST /<phone_number_id>/smb_app_data` con `sync_type` `smb_app_state_sync` y después `history`). Meta lo acepta una sola vez y solo en las **24 horas** siguientes al alta; si un pedido falla, Configuración muestra "Volver a pedir" dentro de ese plazo. Para repetirlo después hay que desconectar y volver a conectar.
+- **Historial** (webhook `history`): los chats de hasta 6 meses que el dueño aceptó compartir se guardan en Conversaciones, sin respuesta del bot ni "sin leer". Los grupos se ignoran. Si el dueño no lo compartió (error `2593109`), Configuración lo dice y sigue todo igual.
+- **Contactos** (webhook `smb_app_state_sync`): los nuevos pasan a Clientes con su nombre; a un cliente sin nombre se le completa. Un contacto borrado en el celular no se borra de Responbot.
+- **Respuestas desde el celular** (webhook `smb_message_echoes`): se guardan en la conversación como "Desde el celular" y el bot deja de responderle a ese cliente por **12 horas** (`PHONE_PAUSE_HOURS` en `lib/whatsapp/coexistence.ts`). Pasado ese tiempo, el próximo mensaje del cliente vuelve al bot. Si la conversación la tomó alguien desde el panel, sigue tomada sin vencimiento.
+- Si el dueño desconecta Responbot desde la app, llega `account_update` con `PARTNER_REMOVED` y el número queda "Desconectado".
+
+### Qué tenés que configurar en Meta
+
+1. En el webhook (sección 3), suscribí `smb_message_echoes`, `history` y `smb_app_state_sync`.
+2. La configuración del alta embebida (`META_CONFIG_ID`) tiene que ser nueva: Meta dejó de lado las versiones 2 y 3 del alta embebida y la versión sale de la configuración, no del código. Si la creaste antes de mediados de octubre de 2026, creá otra y cambiá `META_CONFIG_ID`.
+3. En la revisión de la app (sección 5), sumá al video el flujo con "Mi número de WhatsApp Business".
+
+### Límites que pone Meta (revisalos en su documentación antes de lanzar)
+
+Este resumen sale de la documentación de Meta y de integraciones de terceros; no se pudo verificar contra la página oficial desde el entorno de desarrollo, así que confirmalo en [Onboard WhatsApp Business app users](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-business-app-users/):
+
+- Solo la app **WhatsApp Business**, actualizada (no el WhatsApp común).
+- Hay países donde Meta no la ofrece todavía; revisá que Uruguay y los países de los pilotos estén incluidos.
+- El dueño tiene que abrir la app al menos una vez cada 14 días para que la conexión siga.
+- Con el número compartido, la app deja de tener algunas funciones (por ejemplo mensajes temporales y de una sola vista, y las listas de difusión quedan solo de lectura) y el número queda limitado a unos 20 mensajes por segundo por API.
+- Lo que el dueño manda desde la app es gratis; lo que manda el bot se cobra como siempre. Lo que manda desde la app no abre ni alarga la ventana de 24 horas.
+
 ## Probar sin Meta
 
 - El **chat de prueba** de `/app/bot` usa el mismo motor y muestra las opciones como botones.
-- Los tests (`pnpm test`, archivo `tests/unit/whatsapp.test.ts`) simulan a Meta de punta a punta: webhook firmado, audios, imágenes, botones, estados y la bandeja.
+- Los tests (`pnpm test`, archivos `tests/unit/whatsapp.test.ts` y `tests/unit/coexistence.test.ts`) simulan a Meta de punta a punta: webhook firmado, audios, imágenes, botones, estados y la bandeja.
 - En local, con las variables cargadas, se puede mandar un evento firmado:
 
 ```bash

@@ -1,7 +1,9 @@
-import { CheckCircle2, MessageCircle } from "lucide-react"
+import { CheckCircle2, MessageCircle, Smartphone } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { ConnectWhatsAppButton } from "@/components/whatsapp/connect-button"
+import { ConnectWhatsAppChoice } from "@/components/whatsapp/connect-choice"
+import type * as schema from "@/lib/db/schema"
 import type { ScopedDb } from "@/lib/db/scoped"
 import { env } from "@/lib/env"
 import {
@@ -10,9 +12,10 @@ import {
   templateDefinitions,
   type RemoteTemplate,
 } from "@/lib/integrations/whatsapp/templates"
+import { syncWindowOpen } from "@/lib/whatsapp/coexistence"
 import { accountToken, graphOptions, isWhatsAppConfigured } from "@/lib/whatsapp/deps"
 
-import { DisconnectWhatsAppButton, SubmitTemplatesButton } from "./whatsapp-controls"
+import { DisconnectWhatsAppButton, RetrySyncButton, SubmitTemplatesButton } from "./whatsapp-controls"
 
 /*
  * Conexión de WhatsApp en Configuración: el botón del alta embebida, el
@@ -42,6 +45,56 @@ async function remoteTemplates(wabaId: string, token: string): Promise<RemoteTem
   }
 }
 
+const syncLabels: Record<NonNullable<schema.WhatsAppAccount["historySync"]>, string> = {
+  requested: "Pedido a Meta",
+  in_progress: "Llegando",
+  done: "Listo",
+  declined: "No compartido",
+  failed: "No se pudo pedir",
+}
+
+/** Coexistencia: qué pasó con los contactos y el historial de la app del celular. */
+function AppSync({ account }: { account: schema.WhatsAppAccount }) {
+  const history =
+    account.historySync === "in_progress" && account.historyProgress !== null
+      ? `Llegando (${account.historyProgress} %)`
+      : account.historySync
+        ? syncLabels[account.historySync]
+        : "Sin pedir"
+  const contacts = account.contactsSync ? syncLabels[account.contactsSync] : "Sin pedir"
+  const canRetry =
+    syncWindowOpen(account, new Date()) && (account.contactsSync === "failed" || account.historySync === "failed")
+
+  return (
+    <div className="grid gap-2">
+      <p className="flex items-center gap-2 text-sm font-medium">
+        <Smartphone className="size-4 text-muted-foreground" />
+        También en tu celular
+      </p>
+      <p className="text-sm text-muted-foreground">
+        Seguís usando este número en la app WhatsApp Business. Lo que respondés desde el celular aparece en
+        Conversaciones, y el bot deja tranquilo a ese cliente por unas horas.
+      </p>
+      <ul className="grid gap-1.5 text-sm">
+        <li className="flex items-center justify-between gap-3">
+          <span>Contactos de la app</span>
+          <Badge variant={account.contactsSync === "done" ? "default" : "secondary"}>{contacts}</Badge>
+        </li>
+        <li className="flex items-center justify-between gap-3">
+          <span>Chats de los últimos 6 meses</span>
+          <Badge variant={account.historySync === "done" ? "default" : "secondary"}>{history}</Badge>
+        </li>
+      </ul>
+      {account.historySync === "declined" ? (
+        <p className="text-sm text-muted-foreground">
+          En la app elegiste no compartir los chats viejos. Los mensajes nuevos llegan igual.
+        </p>
+      ) : null}
+      {canRetry ? <RetrySyncButton /> : null}
+    </div>
+  )
+}
+
 export async function WhatsAppSection({ db }: { db: ScopedDb }) {
   const configured = isWhatsAppConfigured()
   const account = await db.whatsappAccounts.findFirst()
@@ -55,14 +108,14 @@ export async function WhatsAppSection({ db }: { db: ScopedDb }) {
             <span className="block text-sm font-medium">WhatsApp</span>
             <span className="block text-sm text-muted-foreground">
               {configured
-                ? "Conectá el número de tu negocio para que el bot responda. Se abre una ventana de Meta para elegir o crear tu cuenta de WhatsApp Business."
+                ? "Conectá el número de tu negocio para que el bot responda. Se abre una ventana de Meta para terminar la conexión."
                 : "La conexión con WhatsApp todavía no está habilitada en Responbot."}
             </span>
           </span>
           {configured ? null : <Badge variant="secondary">Muy pronto</Badge>}
         </div>
         {configured ? (
-          <ConnectWhatsAppButton
+          <ConnectWhatsAppChoice
             appId={env.META_APP_ID!}
             configId={env.META_CONFIG_ID!}
             version={env.WHATSAPP_API_VERSION}
@@ -102,6 +155,8 @@ export async function WhatsAppSection({ db }: { db: ScopedDb }) {
         </p>
       ) : null}
 
+      {active && account.coexistence ? <AppSync account={account} /> : null}
+
       {active ? (
         <div className="grid gap-2">
           <p className="text-sm font-medium">Plantillas de mensajes</p>
@@ -137,9 +192,10 @@ export async function WhatsAppSection({ db }: { db: ScopedDb }) {
             configId={env.META_CONFIG_ID!}
             version={env.WHATSAPP_API_VERSION}
             label="Volver a conectar"
+            coexistence={account.coexistence}
           />
         ) : null}
-        <DisconnectWhatsAppButton />
+        <DisconnectWhatsAppButton coexistence={account.coexistence} />
       </div>
     </div>
   )

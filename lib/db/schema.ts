@@ -81,6 +81,8 @@ export const connectionStatusEnum = pgEnum("connection_status", [
   "disconnected",
   "token_expired",
 ])
+/** Pedido de sincronización a la app WhatsApp Business (coexistencia). */
+export const syncStatusEnum = pgEnum("sync_status", ["requested", "in_progress", "done", "declined", "failed"])
 export const conversationModeEnum = pgEnum("conversation_mode", ["bot", "human"])
 export const messageDirectionEnum = pgEnum("message_direction", ["inbound", "outbound"])
 export const messageTypeEnum = pgEnum("message_type", [
@@ -551,6 +553,19 @@ export const whatsappAccounts = pgTable("whatsapp_accounts", {
   /** PIN de verificación en dos pasos con el que se registró el número, cifrado. */
   pinEnc: text("pin_enc"),
   status: connectionStatusEnum("status").notNull().default("active"),
+  /**
+   * Coexistencia: el número sigue andando en la app WhatsApp Business del
+   * celular del dueño además de Cloud API (no se registra con PIN).
+   */
+  coexistence: boolean("coexistence").notNull().default(false),
+  /** Cuándo se conectó en modo coexistencia; Meta da 24 horas desde ahí para pedir contactos e historial. */
+  coexistenceAt: timestamp("coexistence_at", { withTimezone: true }),
+  /** Estado del pedido de contactos de la app (smb_app_state_sync). */
+  contactsSync: syncStatusEnum("contacts_sync"),
+  /** Estado del pedido de historial de chats de la app (history). */
+  historySync: syncStatusEnum("history_sync"),
+  /** Avance del historial que informa Meta (0 a 100). */
+  historyProgress: integer("history_progress"),
   ...timestamps,
 })
 
@@ -591,6 +606,12 @@ export const conversations = pgTable(
     /** Último mensaje (de cualquier lado), para ordenar la bandeja y mostrar un adelanto. */
     lastMessageAt: timestamp("last_message_at", { withTimezone: true }),
     lastMessagePreview: text("last_message_preview"),
+    /**
+     * Pausa del bot porque el dueño respondió desde la app del celular
+     * (coexistencia). Pasada esta hora, el próximo mensaje del cliente vuelve
+     * al bot. Nulo con modo humano = lo tomó alguien desde el panel, sin vencimiento.
+     */
+    humanUntil: timestamp("human_until", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [uniqueIndex().on(t.businessId, t.customerId), index().on(t.businessId, t.lastMessageAt)],
@@ -626,6 +647,11 @@ export const messages = pgTable(
     choices: jsonb("choices").$type<MessageChoices>(),
     /** Persona del equipo que lo mandó desde el panel (nulo = el bot o el cliente). */
     sentBy: uuid("sent_by").references(() => users.id, { onDelete: "set null" }),
+    /**
+     * Salió desde la app WhatsApp Business del celular (coexistencia: eco o
+     * historial importado), no desde Responbot.
+     */
+    fromPhone: boolean("from_phone").notNull().default(false),
     /** Motivo si WhatsApp no lo pudo entregar. */
     error: text("error"),
     ...timestamps,

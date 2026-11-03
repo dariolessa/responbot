@@ -6,6 +6,7 @@ import { requirePermission } from "@/lib/auth/tenant"
 import { fail, ok, type ActionResult } from "@/lib/forms"
 import { unsubscribeApp } from "@/lib/integrations/whatsapp/signup"
 import { submitMissingTemplates } from "@/lib/integrations/whatsapp/templates"
+import { requestAppSyncs, syncWindowOpen } from "@/lib/whatsapp/coexistence"
 import { removeWhatsAppConnection } from "@/lib/whatsapp/connection"
 import { accountToken, graphOptions } from "@/lib/whatsapp/deps"
 
@@ -38,4 +39,18 @@ export async function submitTemplates(): Promise<ActionResult<{ submitted: numbe
   } catch {
     return fail("No pudimos hablar con Meta. Probá de nuevo en unos minutos.")
   }
+}
+
+/** Coexistencia: vuelve a pedir contactos o historial si el primer pedido falló (solo en las primeras 24 horas). */
+export async function retryAppSync(): Promise<ActionResult> {
+  const tenant = await requirePermission("manageConnections")
+  const account = await tenant.db.whatsappAccounts.findFirst()
+  if (!account || account.status !== "active" || !account.coexistence) return fail("Primero conectá WhatsApp.")
+  if (!syncWindowOpen(account, new Date())) {
+    return fail("Pasaron más de 24 horas desde que conectaste el número y Meta ya no deja pedir el historial.")
+  }
+  const failed = await requestAppSyncs(tenant.db, account, graphOptions(accountToken(account)))
+  revalidatePath("/app/configuracion")
+  if (failed.length > 0) return fail("Meta no aceptó el pedido. Probá de nuevo en unos minutos.")
+  return ok()
 }
