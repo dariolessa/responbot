@@ -29,6 +29,7 @@ export async function saveWhatsAppConnection(
   actorId: string,
   result: SignupResult,
   encryptToken: (value: string) => string,
+  now: Date = new Date(),
 ): Promise<schema.WhatsAppAccount> {
   const values = {
     wabaId: result.wabaId,
@@ -36,8 +37,14 @@ export async function saveWhatsAppConnection(
     displayPhone: result.displayPhone,
     verifiedName: result.verifiedName,
     accessTokenEnc: encryptToken(result.token),
-    pinEnc: encryptToken(result.pin),
+    pinEnc: result.pin ? encryptToken(result.pin) : null,
     status: "active" as const,
+    coexistence: result.coexistence,
+    coexistenceAt: result.coexistence ? now : null,
+    // Cada alta nueva arranca sin pedidos de sincronización.
+    contactsSync: null,
+    historySync: null,
+    historyProgress: null,
   }
 
   let account: schema.WhatsAppAccount | undefined
@@ -57,7 +64,12 @@ export async function saveWhatsAppConnection(
     action: "whatsapp.connected",
     targetType: "whatsapp_account",
     targetId: account.id,
-    metadata: { wabaId: result.wabaId, phoneNumberId: result.phoneNumberId, displayPhone: result.displayPhone },
+    metadata: {
+      wabaId: result.wabaId,
+      phoneNumberId: result.phoneNumberId,
+      displayPhone: result.displayPhone,
+      coexistence: result.coexistence,
+    },
   })
   const business = await scoped.business()
   if (business && !business.onboardingCompleted.includes("whatsapp")) {

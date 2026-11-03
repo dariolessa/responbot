@@ -58,6 +58,55 @@ const messagesValue = z.object({
   statuses: z.array(status).optional(),
 })
 
+// Coexistencia (app WhatsApp Business + Cloud API en el mismo número).
+const metadata = z.object({ phone_number_id: z.string(), display_phone_number: z.string().optional() })
+
+/** Lo que el dueño mandó desde la app del celular (campo smb_message_echoes). */
+const echoesValue = z.object({
+  metadata,
+  message_echoes: z.array(inboundMessage.extend({ to: z.string() })).optional(),
+})
+
+const historyMessage = inboundMessage.extend({
+  to: z.string().optional(),
+  history_context: z.object({ status: z.string().optional() }).optional(),
+})
+
+/** Historial de chats de la app, en tandas (campo history). */
+const historyValue = z.object({
+  metadata,
+  history: z
+    .array(
+      z.object({
+        metadata: z
+          .object({ phase: z.number().optional(), chunk_order: z.number().optional(), progress: z.number().optional() })
+          .optional(),
+        threads: z.array(z.object({ id: z.string(), messages: z.array(historyMessage).optional() })).optional(),
+        errors: z.array(z.object({ code: z.number().optional(), message: z.string().optional() })).optional(),
+      }),
+    )
+    .optional(),
+})
+
+/** Contactos de la app (campo smb_app_state_sync). */
+const stateSyncValue = z.object({
+  metadata,
+  state_sync: z
+    .array(
+      z.object({
+        type: z.string(),
+        action: z.string().optional(),
+        contact: z
+          .object({ full_name: z.string().optional(), first_name: z.string().optional(), phone_number: z.string() })
+          .optional(),
+      }),
+    )
+    .optional(),
+})
+
+/** Meta no compartió el historial porque el dueño no lo aceptó en la app. */
+export const HISTORY_DECLINED_CODE = 2593109
+
 export const webhookPayload = z.object({
   object: z.string(),
   entry: z.array(
@@ -100,6 +149,48 @@ export type WebhookEvent =
       errorCode: number | null
     }
   | { kind: "account"; wabaId: string; event: string }
+  | {
+      /** Mensaje que mandó el dueño desde la app del celular (coexistencia). */
+      kind: "echo"
+      phoneNumberId: string
+      /** wa_id del cliente al que le escribió. */
+      to: string
+      wamid: string
+      at: Date | null
+      content: InboundContent
+    }
+  | {
+      /** Una tanda del historial de chats de la app (coexistencia). */
+      kind: "history"
+      phoneNumberId: string
+      /** 0 a 100, si Meta lo informa. */
+      progress: number | null
+      /** Código de error de Meta (por ejemplo HISTORY_DECLINED_CODE), o null. */
+      errorCode: number | null
+      threads: { waId: string; messages: HistoryMessage[] }[]
+    }
+  | {
+      /** Contactos de la app agregados o quitados (coexistencia). */
+      kind: "contacts"
+      phoneNumberId: string
+      contacts: { waId: string; name: string | null; action: "add" | "remove" }[]
+    }
+
+export type HistoryMessage = {
+  wamid: string
+  direction: "inbound" | "outbound"
+  at: Date | null
+  content: InboundContent
+  /** Estado que informa Meta para lo que mandó el negocio (sent, delivered, read…). */
+  status: string | null
+}
+
+function dateOf(timestamp: string | undefined): Date | null {
+  const seconds = Number(timestamp)
+  return Number.isFinite(seconds) && seconds > 0 ? new Date(seconds * 1000) : null
+}
+
+const SKIPPED_TYPES = new Set(["reaction", "edit", "revoke", "errors"])
 
 function contentOf(message: z.infer<typeof inboundMessage>): InboundContent {
   switch (message.type) {
@@ -145,6 +236,61 @@ export function parseWebhook(payload: WebhookPayload): WebhookEvent[] {
         if (value.success) events.push({ kind: "account", wabaId: entry.id, event: value.data.event })
         continue
       }
+      if (change.field === "smb_message_echoes") {
+        const value = echoesValue.safeParse(change.value)
+        if (!value.success) continue
+        for (const message of value.data.message_echoes ?? []) {
+          if (SKIPPED_TYPES.has(message.type)) continue
+          events.push({
+            kind: "echo",
+            phoneNumberId: value.data.metadata.phone_number_id,
+            to: message.to,
+            wamid: message.id,
+            at: dateOf(message.timestamp),
+            content: contentOf(message),
+          })
+        }
+        continue
+      }
+      if (change.field === "history") {
+        const value = historyValue.safeParse(change.value)
+        if (!value.success) continue
+        for (const chunk of value.data.history ?? []) {
+          events.push({
+            kind: "history",
+            phoneNumberId: value.data.metadata.phone_number_id,
+            progress: chunk.metadata?.progress ?? null,
+            errorCode: chunk.errors?.[0]?.code ?? null,
+            threads: (chunk.threads ?? []).map((thread) => ({
+              waId: thread.id,
+              messages: (thread.messages ?? [])
+                .filter((m) => !SKIPPED_TYPES.has(m.type))
+                .map((m) => ({
+                  wamid: m.id,
+                  // En el hilo de un cliente, lo que no viene de su número lo mandó el negocio.
+                  direction: m.from === thread.id ? ("inbound" as const) : ("outbound" as const),
+                  at: dateOf(m.timestamp),
+                  content: contentOf(m),
+                  status: m.history_context?.status?.toLowerCase() ?? null,
+                })),
+            })),
+          })
+        }
+        continue
+      }
+      if (change.field === "smb_app_state_sync") {
+        const value = stateSyncValue.safeParse(change.value)
+        if (!value.success) continue
+        const contacts = (value.data.state_sync ?? []).flatMap((item) => {
+          if (item.type !== "contact" || !item.contact) return []
+          const name = item.contact.full_name?.trim() || item.contact.first_name?.trim() || null
+          return [{ waId: item.contact.phone_number, name, action: item.action === "remove" ? ("remove" as const) : ("add" as const) }]
+        })
+        if (contacts.length > 0) {
+          events.push({ kind: "contacts", phoneNumberId: value.data.metadata.phone_number_id, contacts })
+        }
+        continue
+      }
       if (change.field !== "messages") continue
       const value = messagesValue.safeParse(change.value)
       if (!value.success) continue
@@ -154,14 +300,13 @@ export function parseWebhook(payload: WebhookPayload): WebhookEvent[] {
       for (const message of messages) {
         // Las reacciones no son un mensaje para responder.
         if (message.type === "reaction") continue
-        const seconds = Number(message.timestamp)
         events.push({
           kind: "message",
           phoneNumberId: metadata.phone_number_id,
           from: message.from,
           profileName: names.get(message.from) ?? null,
           wamid: message.id,
-          at: Number.isFinite(seconds) && seconds > 0 ? new Date(seconds * 1000) : null,
+          at: dateOf(message.timestamp),
           content: contentOf(message),
         })
       }

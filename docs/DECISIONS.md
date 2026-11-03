@@ -206,3 +206,13 @@ Decisiones que el SPEC no define, tomadas con el criterio "la opción más simpl
 | Entrar como el usuario | "Modo soporte": el admin de la plataforma ve el panel del negocio con rol Admin, sin tomar la identidad del dueño. Cookie `rb_soporte` (solo el id del negocio, httpOnly, 2 h) que `getTenant()` respeta solo si el email está en `PLATFORM_ADMIN_EMAILS`. | Lo que se hace queda a nombre de quien lo hizo; sin Facturación, transferencia ni borrado. Copiar la cookie no sirve a nadie más. |
 | Auditoría | Entrar, salir y extender la prueba se anotan en `audit_logs` del negocio (`platform.support_started`, `platform.support_ended`, `platform.trial_extended`). Si la cookie vence sola, no hay registro de salida. | Sin tabla nueva ni migración. |
 | Extender la prueba | Suma días a `trial_ends_at` desde su fin si sigue vigente, o desde hoy si ya venció. | Lo que se espera al "darle más días" a alguien. |
+
+## Coexistencia con la app WhatsApp Business (2026-11-03)
+
+| Tema | Decisión | Por qué |
+| --- | --- | --- |
+| Elección | Antes de conectar, el dueño elige "Mi número de WhatsApp Business" (por defecto, coexistencia) o "Un número nuevo solo para el bot". | La mayoría de los negocios no quiere cambiar de número. |
+| Pausa del bot | Un eco (`smb_message_echoes`) pone la conversación en modo humano con `conversations.human_until` = ahora + 12 h. El próximo mensaje del cliente después de esa hora vuelve al bot. Tomar, responder o devolver desde el panel borra `human_until` (lo del panel no vence). | El dueño que contesta desde el celular no va a entrar al panel a "devolver al bot"; sin vencimiento, ese cliente se quedaba sin bot para siempre. |
+| Historial | Se importa todo lo que manda Meta (hasta 6 meses), marcado `messages.from_phone` lo que salió del negocio, sin sumar "sin leer" ni tocar `last_inbound_at`. Sin transcribir audios ni describir fotos. | Contexto para el equipo y para el bot sin costo de IA ni abrir ventanas de 24 h falsas. |
+| Contactos | Altas a Clientes y nombre si faltaba; las bajas se ignoran. | Un cliente puede tener turnos; borrar por un cambio en la agenda del celular sería destructivo. |
+| Estado | Columnas `whatsapp_accounts.coexistence`, `coexistence_at`, `contacts_sync`, `history_sync` (enum `sync_status`) y `history_progress`. | Mostrar en Configuración qué llegó y permitir reintentar en las 24 h. |

@@ -1,14 +1,40 @@
 "use client"
 
-import { Send, Unplug } from "lucide-react"
+import { RefreshCw, Send, Unplug } from "lucide-react"
 import { useState, useTransition } from "react"
 
 import { FormError } from "@/components/forms/field"
 import { Button } from "@/components/ui/button"
 
-import { disconnectWhatsApp, submitTemplates } from "./whatsapp-actions"
+import { disconnectWhatsApp, retryAppSync, submitTemplates } from "./whatsapp-actions"
 
-export function DisconnectWhatsAppButton() {
+export function RetrySyncButton() {
+  const [pending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+  return (
+    <div className="grid gap-2">
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={pending}
+        className="w-full sm:w-auto"
+        onClick={() =>
+          startTransition(async () => {
+            setError(null)
+            const result = await retryAppSync()
+            if (!result.ok) setError(result.error)
+          })
+        }
+      >
+        <RefreshCw />
+        {pending ? "Pidiendo…" : "Volver a pedir"}
+      </Button>
+      <FormError message={error} />
+    </div>
+  )
+}
+
+export function DisconnectWhatsAppButton({ coexistence = false }: { coexistence?: boolean }) {
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   return (
@@ -17,7 +43,10 @@ export function DisconnectWhatsAppButton() {
         variant="outline"
         disabled={pending}
         onClick={() => {
-          if (!window.confirm("¿Desconectar WhatsApp? El bot deja de responder en ese número hasta que lo vuelvas a conectar.")) return
+          const question = coexistence
+            ? "¿Desconectar WhatsApp? El bot deja de responder, y vos seguís usando la app WhatsApp Business del celular como siempre."
+            : "¿Desconectar WhatsApp? El bot deja de responder en ese número hasta que lo vuelvas a conectar."
+          if (!window.confirm(question)) return
           startTransition(async () => {
             const result = await disconnectWhatsApp()
             if (!result.ok) setError(result.error)

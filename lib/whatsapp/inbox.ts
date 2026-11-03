@@ -108,6 +108,8 @@ export type Thread = {
   assignedName: string | null
   assignedToMe: boolean
   windowOpen: boolean
+  /** El bot está en pausa con este cliente porque le respondieron desde el celular, hasta esta hora. */
+  pausedUntil: string | null
   messages: ThreadMessage[]
 }
 
@@ -137,7 +139,7 @@ export async function loadThread(tenant: InboxTenant, conversationId: string, no
   const memberName = new Map(members.map((m) => [m.userId, m.name ?? m.email ?? "Equipo"]))
   const ratings = await ratingsFor(
     tenant.db,
-    recent.filter((m) => m.direction === "outbound" && !m.sentBy).map((m) => m.id),
+    recent.filter((m) => m.direction === "outbound" && !m.sentBy && !m.fromPhone).map((m) => m.id),
   )
 
   const messages = recent.reverse().map((m): ThreadMessage => {
@@ -155,7 +157,13 @@ export async function loadThread(tenant: InboxTenant, conversationId: string, no
       choices: m.choices?.options.map((o) => o.title) ?? [],
       imageUrl: m.direction === "outbound" ? m.mediaUrl : null,
       author:
-        m.direction === "inbound" ? null : m.sentBy ? (memberName.get(m.sentBy) ?? "Equipo") : "bot",
+        m.direction === "inbound"
+          ? null
+          : m.sentBy
+            ? (memberName.get(m.sentBy) ?? "Equipo")
+            : m.fromPhone
+              ? "Desde el celular"
+              : "bot",
       rating: ratings.has(m.id) ? { value: ratings.get(m.id)!.rating, note: ratings.get(m.id)!.note } : null,
     }
   })
@@ -169,6 +177,7 @@ export async function loadThread(tenant: InboxTenant, conversationId: string, no
     assignedName: conversation.assignedTo ? (memberName.get(conversation.assignedTo) ?? null) : null,
     assignedToMe: conversation.assignedTo === tenant.user.id,
     windowOpen: isWindowOpen(conversation.lastInboundAt, now),
+    pausedUntil: conversation.mode === "human" && conversation.humanUntil ? conversation.humanUntil.toISOString() : null,
     messages,
   }
 }

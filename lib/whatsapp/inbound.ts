@@ -22,6 +22,7 @@ import {
   UNSUPPORTED_REPLY,
   unsupportedText,
 } from "./messages"
+import { applyContacts, applyHistory, handleEcho, resumeBotAfterPhonePause } from "./coexistence"
 import { markWhatsAppBroken } from "./connection"
 import { deliverMessage, failedStatusError, shouldApplyStatus } from "./outbound"
 import { parseReminderButton, reminderReply } from "./scheduled"
@@ -48,7 +49,8 @@ export type WhatsAppDeps = {
   now?: () => Date
 }
 
-const DISCONNECT_EVENTS = new Set(["PARTNER_REMOVED", "ACCOUNT_DELETED"])
+// PARTNER_REMOVED también llega si el dueño desconecta Responbot desde la app WhatsApp Business (coexistencia).
+const DISCONNECT_EVENTS = new Set(["PARTNER_REMOVED", "ACCOUNT_DELETED", "ACCOUNT_OFFBOARDED"])
 
 /** Procesa los eventos y devuelve los negocios tocados (para mandar después lo que haya quedado pendiente). */
 export async function processWebhookEvents(db: AnyDb, events: WebhookEvent[], deps: WhatsAppDeps): Promise<string[]> {
@@ -72,6 +74,9 @@ export async function processWebhookEvents(db: AnyDb, events: WebhookEvent[], de
       }
       const scoped = forBusiness(db, account.businessId)
       if (event.kind === "status") await applyStatus(scoped, event)
+      else if (event.kind === "echo") await handleEcho(scoped, event, deps.now?.() ?? new Date())
+      else if (event.kind === "history") await applyHistory(scoped, account, event)
+      else if (event.kind === "contacts") await applyContacts(scoped, account, event)
       else {
         touched.add(account.businessId)
         await handleInbound(scoped, account, event, deps)
@@ -250,8 +255,15 @@ async function handleInbound(
   if (await scoped.messages.findFirst(eq(schema.messages.wamid, event.wamid))) return
 
   const phone = `+${event.from.replace(/\D/g, "")}`
-  const { customer, conversation } = await findOrCreateConversation(scoped, phone, event.profileName)
+  const found = await findOrCreateConversation(scoped, phone, event.profileName)
+  const { customer } = found
+  let { conversation } = found
   const api = deps.api(account)
+
+  // El dueño le había contestado desde el celular y ya pasó la pausa: vuelve el bot.
+  if (await resumeBotAfterPhonePause(scoped, conversation, deps.now?.() ?? new Date())) {
+    conversation = { ...conversation, mode: "bot", humanUntil: null, assignedTo: null }
+  }
 
   // Visto y "escribiendo…" mientras el bot prepara la respuesta.
   if (conversation.mode === "bot") {

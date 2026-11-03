@@ -9,6 +9,7 @@ import { completeSignup } from "@/lib/integrations/whatsapp/signup"
 import { GraphError } from "@/lib/integrations/whatsapp/graph"
 import { submitMissingTemplates } from "@/lib/integrations/whatsapp/templates"
 
+import { requestAppSyncs } from "./coexistence"
 import { ConnectionError, saveWhatsAppConnection } from "./connection"
 import { encryptToken, graphOptions, isWhatsAppConfigured, metaApp } from "./deps"
 
@@ -21,7 +22,9 @@ import { encryptToken, graphOptions, isWhatsAppConfigured, metaApp } from "./dep
 const signupInput = z.object({
   code: z.string().min(10).max(2000),
   wabaId: z.string().regex(/^\d{5,30}$/),
-  phoneNumberId: z.string().regex(/^\d{5,30}$/),
+  // En coexistencia Meta puede no mandarlo; se busca en la WABA.
+  phoneNumberId: z.string().regex(/^\d{5,30}$/).nullish(),
+  coexistence: z.boolean().optional(),
 })
 
 export async function handleSignup(request: Request): Promise<Response> {
@@ -40,8 +43,15 @@ export async function handleSignup(request: Request): Promise<Response> {
   try {
     const result = await completeSignup(parsed.data, metaApp(), graphOptions())
     const account = await saveWhatsAppConnection(tenant.db, tenant.user.id, result, encryptToken)
-    // Las plantillas se mandan a revisión de Meta sin hacer esperar al dueño.
+    // Las plantillas (y en coexistencia, los contactos y el historial) se piden sin hacer esperar al dueño.
     after(async () => {
+      if (account.coexistence) {
+        try {
+          await requestAppSyncs(tenant.db, account, graphOptions(result.token))
+        } catch (error) {
+          console.error("[whatsapp] no se pudieron pedir contactos e historial", error)
+        }
+      }
       try {
         await submitMissingTemplates(account.wabaId, graphOptions(result.token))
       } catch (error) {

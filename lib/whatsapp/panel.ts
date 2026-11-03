@@ -20,6 +20,7 @@ export async function takeConversation(scoped: ScopedDb, conversationId: string,
   const [row] = await scoped.conversations.update(eq(schema.conversations.id, conversationId), {
     mode: "human",
     assignedTo: userId,
+    humanUntil: null,
     unreadCount: 0,
   })
   if (!row) throw new InboxError("No encontramos la conversación.")
@@ -30,6 +31,7 @@ export async function releaseConversation(scoped: ScopedDb, conversationId: stri
   const [row] = await scoped.conversations.update(eq(schema.conversations.id, conversationId), {
     mode: "bot",
     assignedTo: null,
+    humanUntil: null,
     lockedUntil: null,
     unreadCount: 0,
   })
@@ -74,6 +76,7 @@ export async function sendPanelReply(
   await scoped.conversations.update(eq(schema.conversations.id, conversation.id), {
     mode: "human",
     assignedTo: conversation.assignedTo ?? input.userId,
+    humanUntil: null,
     unreadCount: 0,
     lastMessageAt: now,
     lastMessagePreview: previewOf(message!),

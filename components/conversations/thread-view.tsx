@@ -92,7 +92,13 @@ export function ThreadView({
           {human ? (
             <Badge variant="secondary">
               <UserRound />
-              {thread.assignedToMe ? "La atendés vos" : thread.assignedName ? `La atiende ${thread.assignedName}` : "Necesita una persona"}
+              {thread.pausedUntil
+                ? `Respondiste desde el celular · el bot vuelve ${formatZoned(new Date(thread.pausedUntil), timezone, "HH:mm")}`
+                : thread.assignedToMe
+                  ? "La atendés vos"
+                  : thread.assignedName
+                    ? `La atiende ${thread.assignedName}`
+                    : "Necesita una persona"}
             </Badge>
           ) : (
             <Badge variant="outline">

@@ -189,14 +189,17 @@ export const helpTopics: HelpTopic[] = [
     hrefLabel: "Ir a Conexiones",
     permission: "manageConnections",
     steps: [
-      "Andá a Configuración → Conexiones → WhatsApp y tocá “Conectar WhatsApp”.",
-      "Se abre una ventana de Meta (la empresa de WhatsApp). Entrá con tu Facebook, elegí o creá tu cuenta de WhatsApp Business y el número del negocio.",
+      "Andá a Configuración → Conexiones → WhatsApp y elegí qué número querés conectar: “Mi número de WhatsApp Business” (el que ya usás en la app del celular) o “Un número nuevo solo para el bot”.",
+      "Se abre una ventana de Meta (la empresa de WhatsApp). Entrá con tu Facebook y seguí los pasos. Si elegiste tu número de WhatsApp Business, Meta te muestra un código QR: abrilo desde la app WhatsApp Business del celular y escanealo.",
+      "En la app te pregunta si querés compartir los chats viejos. Si decís que sí, los chats de los últimos 6 meses y tus contactos aparecen en Conversaciones y Clientes.",
       "Al volver, el estado dice “Conectado”. Desde ese momento el bot responde los mensajes que llegan a ese número.",
       "Abajo vas a ver las plantillas de mensajes (recordatorios y avisos). Meta las revisa; cuando dicen “Aprobada” ya se pueden mandar.",
       "Si el estado dice “Hay que reconectar”, tocá “Volver a conectar” y repetí los pasos.",
     ],
     tips: [
-      "Usá un número que no esté en la app común de WhatsApp en un celular, o pasalo a WhatsApp Business antes.",
+      "Con tu número de WhatsApp Business seguís usando la app del celular como siempre. Cuando respondés vos desde el celular, el bot deja tranquilo a ese cliente por 12 horas; lo ves en Conversaciones como “Desde el celular”.",
+      "Tiene que ser la app WhatsApp Business, actualizada. Si usás el WhatsApp común, pasá el número a WhatsApp Business primero o conectá un número nuevo.",
+      "Para mantener la conexión, abrí la app WhatsApp Business del celular al menos una vez cada dos semanas.",
       "Probá primero el bot en el chat de prueba, así sale a responder bien desde el primer día.",
     ],
   },
@@ -307,6 +310,12 @@ export const faq: HelpQuestion[] = [
   {
     question: "¿Puedo atender un chat yo y después devolvérselo al bot?",
     answer: "Sí: “Tomar conversación” para atenderlo vos y “Devolver al bot” cuando termines.",
+  },
+  {
+    question: "¿Puedo seguir usando WhatsApp en mi celular con el bot?",
+    answer:
+      "Sí, si tu número está en la app WhatsApp Business: al conectarlo elegí “Mi número de WhatsApp Business”. Los mensajes llegan a los dos lados, y si contestás vos desde el celular, el bot se calla con ese cliente por 12 horas. Con el WhatsApp común no se puede: pasalo a WhatsApp Business o usá un número nuevo.",
+    permission: "manageConnections",
   },
   {
     question: "¿Tengo varios locales, cómo cambio de uno a otro?",

@@ -12,6 +12,12 @@ import { Button } from "@/components/ui/button"
  * con el SDK oficial de Facebook. Meta devuelve un código por el callback de
  * FB.login y el waba_id y phone_number_id por un postMessage; con los tres se
  * llama a /api/integrations/whatsapp/signup.
+ *
+ * Con `coexistence` abre la variante para quien ya usa la app WhatsApp
+ * Business en el celular (featureType "whatsapp_business_app_onboarding"):
+ * el dueño escanea un código QR desde la app y el número sigue andando ahí.
+ * Meta termina con FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING y puede no mandar
+ * el phone_number_id (el servidor lo busca en la WABA).
  */
 
 type FbLoginResponse = { authResponse?: { code?: string } | null; status?: string }
@@ -47,18 +53,20 @@ function loadSdk(appId: string, version: string): Promise<FacebookSdk> {
   })
 }
 
-type SessionInfo = { wabaId: string; phoneNumberId: string }
+type SessionInfo = { wabaId: string; phoneNumberId: string | null; coexistence: boolean }
 
 export function ConnectWhatsAppButton({
   appId,
   configId,
   version,
   label = "Conectar WhatsApp",
+  coexistence = false,
 }: {
   appId: string
   configId: string
   version: string
   label?: string
+  coexistence?: boolean
 }) {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
@@ -99,7 +107,10 @@ export function ConnectWhatsAppButton({
       }
       if (data?.type !== "WA_EMBEDDED_SIGNUP") return
       if (data.event === "FINISH" && data.data?.waba_id && data.data.phone_number_id) {
-        session.current = { wabaId: data.data.waba_id, phoneNumberId: data.data.phone_number_id }
+        session.current = { wabaId: data.data.waba_id, phoneNumberId: data.data.phone_number_id, coexistence: false }
+        void finish()
+      } else if (data.event === "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING" && data.data?.waba_id) {
+        session.current = { wabaId: data.data.waba_id, phoneNumberId: data.data.phone_number_id ?? null, coexistence: true }
         void finish()
       } else if (data.event === "CANCEL" || data.event === "ERROR") {
         setBusy(false)
@@ -132,7 +143,9 @@ export function ConnectWhatsAppButton({
           config_id: configId,
           response_type: "code",
           override_default_response_type: true,
-          extras: { setup: {}, sessionInfoVersion: "3" },
+          extras: coexistence
+            ? { setup: {}, featureType: "whatsapp_business_app_onboarding", sessionInfoVersion: "3" }
+            : { setup: {}, sessionInfoVersion: "3" },
         },
       )
     } catch {
