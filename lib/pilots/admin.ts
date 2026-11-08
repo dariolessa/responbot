@@ -14,6 +14,7 @@ import { isPlatformAdmin } from "./admins"
 import { createDemoBusiness } from "./demo"
 import { pilotOverview, setPilot } from "./overview"
 import { reviewMarkdown } from "./review"
+import { seedMetaReviewer } from "./reviewer"
 
 /*
  * Puerta de entrada del panel de la plataforma (/admin). Las pantallas y
@@ -83,4 +84,13 @@ export async function adminExtendTrial(businessId: string, days: number) {
 export async function adminStartSupport(businessId: string) {
   const user = await requirePlatformAdmin()
   return startSupport({ businessId, userId: user.id, email: user.email })
+}
+
+/**
+ * Crea o actualiza la cuenta de los revisores de Meta con la contraseña que
+ * escribe el admin en /admin/revisor-meta (lo mismo que `pnpm seed:reviewer`).
+ */
+export async function adminSeedMetaReviewer(password: string) {
+  await requirePlatformAdmin()
+  return seedMetaReviewer(db, { password })
 }

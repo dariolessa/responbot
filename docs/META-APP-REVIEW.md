@@ -35,6 +35,8 @@ DATABASE_URL='<url de Neon de producción>' pnpm db:migrate
 
 Es idempotente: se puede volver a correr para cambiar la contraseña o para renovar los turnos de ejemplo si ya pasaron.
 
+**Desde el navegador (lo más simple):** entrá a https://responbot.com/admin/revisor-meta con tu cuenta de admin (`PLATFORM_ADMIN_EMAILS`), escribí la contraseña dos veces y tocá "Crear o actualizar la cuenta". Hace lo mismo que el script.
+
 Contra producción, desde tu máquina, con el repo clonado y `pnpm install` hecho:
 
 ```bash
