@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { z } from "zod"
 
-import { adminCreateDemo, adminExtendTrial, adminSetPilot, adminStartSupport } from "@/lib/pilots/admin"
+import { MIN_PASSWORD_LENGTH } from "@/lib/auth/password"
+import { adminCreateDemo, adminExtendTrial, adminSeedMetaReviewer, adminSetPilot, adminStartSupport } from "@/lib/pilots/admin"
 
 const DAY_MS = 86_400_000
 
@@ -52,4 +53,21 @@ export async function createDemoAction(): Promise<void> {
   await adminCreateDemo()
   revalidatePath("/admin")
   redirect("/admin?demo=lista")
+}
+
+export type ReviewerState = { error?: string; done?: { createdUser: boolean; createdBusiness: boolean } }
+
+const reviewerInput = z
+  .object({
+    password: z.string().min(MIN_PASSWORD_LENGTH, { error: `La contraseña tiene que tener al menos ${MIN_PASSWORD_LENGTH} caracteres.` }).max(200),
+    confirm: z.string(),
+  })
+  .refine((v) => v.password === v.confirm, { error: "Las dos contraseñas no coinciden." })
+
+/** Crea o actualiza reviewer@responbot.com con la contraseña escrita (App Review de Meta). */
+export async function seedMetaReviewerAction(_prev: ReviewerState, formData: FormData): Promise<ReviewerState> {
+  const parsed = reviewerInput.safeParse({ password: formData.get("password"), confirm: formData.get("confirm") })
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message }
+  const result = await adminSeedMetaReviewer(parsed.data.password)
+  return { done: { createdUser: result.createdUser, createdBusiness: result.createdBusiness } }
 }

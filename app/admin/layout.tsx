@@ -27,6 +27,9 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
             <Link href="/admin/revision" className="inline-flex min-h-11 items-center rounded-md px-2 hover:bg-muted sm:min-h-8">
               Revisión del bot
             </Link>
+            <Link href="/admin/revisor-meta" className="inline-flex min-h-11 items-center rounded-md px-2 hover:bg-muted sm:min-h-8">
+              Revisor de Meta
+            </Link>
             <Link href="/admin/ayuda" className="inline-flex min-h-11 items-center rounded-md px-2 hover:bg-muted sm:min-h-8">
               Cómo se usa
             </Link>
