@@ -41,6 +41,7 @@ export async function saveWhatsAppConnection(
     status: "active" as const,
     coexistence: result.coexistence,
     coexistenceAt: result.coexistence ? now : null,
+    metaUserId: result.metaUserId ?? null,
     // Cada alta nueva arranca sin pedidos de sincronización.
     contactsSync: null,
     historySync: null,

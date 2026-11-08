@@ -58,7 +58,7 @@ export function SiteFooter() {
           <Link href="/privacidad" className="hover:text-foreground">
             Privacidad
           </Link>
-          <Link href="/eliminacion-de-datos" className="hover:text-foreground">
+          <Link href="/eliminacion-datos" className="hover:text-foreground">
             Eliminación de datos
           </Link>
           {brand.contactEmail ? (

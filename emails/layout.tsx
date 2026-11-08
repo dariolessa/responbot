@@ -39,7 +39,7 @@ export function EmailLayout({
         <Container style={{ maxWidth: "480px", padding: "40px 16px" }}>
           <Section style={{ border: "1px solid #e4e4e7", borderRadius: "10px", padding: "32px 24px" }}>
             <Text style={{ margin: "0 0 24px", fontSize: "15px", fontWeight: 700 }}>
-              Respon<span style={{ color: brand.green }}>bot</span>
+              Respon<span style={{ color: brand.color }}>bot</span>
             </Text>
             <Text style={{ margin: "0 0 12px", fontSize: "20px", fontWeight: 600, lineHeight: "1.3" }}>{title}</Text>
             {children}

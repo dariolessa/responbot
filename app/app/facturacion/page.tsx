@@ -25,7 +25,15 @@ const notices: Record<string, { text: string; error?: boolean }> = {
 }
 
 function statusLine(state: BillingState, business: Business): { badge: string; text: string; tone?: "warn" } {
-  const day = (date: Date) => formatZoned(date, business.timezone, "d 'de' MMMM")
+  // Con el año si no es el actual (un piloto largo, como la cuenta de los revisores de Meta, no parece vencido).
+  const day = (date: Date) =>
+    formatZoned(
+      date,
+      business.timezone,
+      formatZoned(date, business.timezone, "yyyy") === formatZoned(new Date(), business.timezone, "yyyy")
+        ? "d 'de' MMMM"
+        : "d 'de' MMMM 'de' yyyy",
+    )
   switch (state.status) {
     case "trialing":
       return {

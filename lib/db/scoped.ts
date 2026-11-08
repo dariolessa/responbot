@@ -652,6 +652,35 @@ export function forPlatform(db: AnyDb) {
       return rows.map((r) => r.id)
     },
 
+    /** Conexiones de WhatsApp hechas por esa persona de Facebook (pedido de eliminación de datos de Meta). */
+    whatsAppAccountsByMetaUserId(metaUserId: string) {
+      return db.select().from(schema.whatsappAccounts).where(eq(schema.whatsappAccounts.metaUserId, metaUserId))
+    },
+
+    /** Pedidos de eliminación de datos de Meta (/api/meta/data-deletion y /eliminacion-datos). */
+    dataDeletionRequests: {
+      async insert(values: { code: string; metaUserId: string }) {
+        const [row] = await db.insert(schema.dataDeletionRequests).values(values).returning()
+        return row!
+      },
+      async complete(id: string, result: { whatsappAccounts: number; conversations: number }, at: Date) {
+        const [row] = await db
+          .update(schema.dataDeletionRequests)
+          .set({ status: "completed", result, completedAt: at })
+          .where(eq(schema.dataDeletionRequests.id, id))
+          .returning()
+        return row
+      },
+      async byCode(code: string) {
+        const [row] = await db
+          .select()
+          .from(schema.dataDeletionRequests)
+          .where(eq(schema.dataDeletionRequests.code, code))
+          .limit(1)
+        return row
+      },
+    },
+
     /** Resend avisó un rebote o una queja: no se le mandan más correos de avisos a esa dirección. */
     async markEmailBounced(email: string, at: Date) {
       const rows = await db

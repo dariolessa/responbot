@@ -25,6 +25,7 @@ const signupInput = z.object({
   // En coexistencia Meta puede no mandarlo; se busca en la WABA.
   phoneNumberId: z.string().regex(/^\d{5,30}$/).nullish(),
   coexistence: z.boolean().optional(),
+  metaUserId: z.string().regex(/^\d{1,40}$/).nullish(),
 })
 
 export async function handleSignup(request: Request): Promise<Response> {

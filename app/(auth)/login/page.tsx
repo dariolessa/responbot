@@ -10,6 +10,7 @@ import { safeCallbackUrl } from "@/lib/auth/callback-url"
 
 import { signInWithGoogle } from "./actions"
 import { MagicLinkForm } from "./magic-link-form"
+import { PasswordForm } from "./password-form"
 
 export const metadata: Metadata = { title: "Entrar" }
 
@@ -70,9 +71,17 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
 
         <MagicLinkForm callbackUrl={callbackUrl} />
 
-        <p className="mt-10 text-center text-xs leading-relaxed text-muted-foreground">
+        <p className="mt-4 text-center text-xs leading-relaxed text-muted-foreground">
           Te mandamos un enlace que vale por 15 minutos y se usa una sola vez.
         </p>
+
+        <details className="group mt-8 rounded-lg border px-4 py-3" open={params.password !== undefined || undefined}>
+          <summary className="cursor-pointer text-sm font-medium">Entrar con email y contraseña</summary>
+          <p className="mt-2 mb-4 text-xs leading-relaxed text-muted-foreground">
+            Para cuentas de prueba que te dimos con contraseña (por ejemplo, el equipo de revisión de Meta).
+          </p>
+          <PasswordForm callbackUrl={callbackUrl} />
+        </details>
       </div>
     </main>
   )

@@ -71,6 +71,13 @@
       "when": 1793724929787,
       "tag": "0009_coexistencia",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794106129942,
+      "tag": "0010_meta_app_review",
+      "breakpoints": true
     }
   ]
 }

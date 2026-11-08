@@ -1,40 +1,35 @@
 import { brand } from "@/lib/brand"
 import { cn } from "@/lib/utils"
 
-/** Isotipo de Responbot: globo de chat con el robot (public/brand/responbot-mark.svg). */
+/** Isotipo de Responbot: carita de robot sobre un cuadrado redondeado índigo (public/brand/responbot-mark.svg). */
 export function LogoMark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 64 64" fill="none" aria-hidden="true" className={cn("size-7", className)}>
       <defs>
-        <linearGradient id="rb-g" x1="14" y1="6" x2="50" y2="58" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#04BB38" />
-          <stop offset="1" stopColor="#029723" />
+        <linearGradient id="rb-g" x1="6" y1="4" x2="58" y2="60" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#6366F1" />
+          <stop offset="1" stopColor="#7C3AED" />
         </linearGradient>
       </defs>
-      <path d="M32 4a27 27 0 1 1-13.4 50.4L6 59l4.4-12A27 27 0 0 1 32 4Z" fill="url(#rb-g)" />
-      <path d="M32 21v-6" stroke="#fff" strokeWidth="3" strokeLinecap="round" />
-      <circle cx="32" cy="12.5" r="3.5" fill="#fff" />
-      <rect x="12" y="27" width="6" height="12" rx="3" fill="#E9ECEF" />
-      <rect x="46" y="27" width="6" height="12" rx="3" fill="#E9ECEF" />
-      <rect x="15" y="20" width="34" height="26" rx="11" fill="#fff" />
-      <rect x="19.5" y="25" width="25" height="15" rx="7" fill="#030A14" />
-      <path
-        d="M24.5 34.5c1.2-2.2 4.3-2.2 5.5 0M34 34.5c1.2-2.2 4.3-2.2 5.5 0"
-        stroke="#fff"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-      />
+      <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#rb-g)" />
+      <path d="M32 19.5v-5" stroke="#fff" strokeWidth="3" strokeLinecap="round" />
+      <circle cx="32" cy="12" r="3.5" fill="#fff" />
+      <rect x="12" y="19" width="40" height="31" rx="12" fill="#fff" />
+      <rect x="17.5" y="25" width="29" height="15" rx="7.5" fill="#1E1B4B" />
+      <circle cx="26" cy="32.5" r="3" fill="#A5B4FC" />
+      <circle cx="38" cy="32.5" r="3" fill="#A5B4FC" />
+      <path d="M27 44.5h10" stroke="#C4B5FD" strokeWidth="2.5" strokeLinecap="round" />
     </svg>
   )
 }
 
-/** Logo completo: isotipo + "Respon" + "bot" en verde. */
+/** Logo completo: isotipo + "Respon" + "bot" en violeta. */
 export function Logo({ className }: { className?: string }) {
   return (
     <span className={cn("inline-flex items-center gap-2 font-bold tracking-tight", className)}>
       <LogoMark />
       <span aria-label={brand.name}>
-        Respon<span className="text-[#02A82F] dark:text-[#0BC53F]">bot</span>
+        Respon<span className="text-[#6D28D9] dark:text-[#A78BFA]">bot</span>
       </span>
     </span>
   )

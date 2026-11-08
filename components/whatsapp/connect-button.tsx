@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button"
  * el phone_number_id (el servidor lo busca en la WABA).
  */
 
-type FbLoginResponse = { authResponse?: { code?: string } | null; status?: string }
+type FbLoginResponse = { authResponse?: { code?: string; userID?: string } | null; status?: string }
 
 type FacebookSdk = {
   init(options: { appId: string; autoLogAppEvents: boolean; xfbml: boolean; version: string }): void
@@ -73,10 +73,12 @@ export function ConnectWhatsAppButton({
   const [busy, setBusy] = useState(false)
   const session = useRef<SessionInfo | null>(null)
   const code = useRef<string | null>(null)
+  // Id de Facebook de quien hace el alta: identifica la conexión si Meta pide borrar sus datos.
+  const metaUserId = useRef<string | null>(null)
 
   async function finish() {
     if (!session.current || !code.current) return
-    const body = { code: code.current, ...session.current }
+    const body = { code: code.current, metaUserId: metaUserId.current, ...session.current }
     session.current = null
     code.current = null
     try {
@@ -137,6 +139,7 @@ export function ConnectWhatsAppButton({
             return
           }
           code.current = received
+          metaUserId.current = response.authResponse?.userID ?? null
           void finish()
         },
         {
