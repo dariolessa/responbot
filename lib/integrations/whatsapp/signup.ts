@@ -34,6 +34,8 @@ export type SignupResult = {
   registered: boolean
   /** El número sigue andando también en la app WhatsApp Business del celular. */
   coexistence: boolean
+  /** Id de Facebook (con alcance de la app) de quien hizo el alta, si el SDK lo devolvió. */
+  metaUserId: string | null
 }
 
 export type SignupInput = {
@@ -42,6 +44,7 @@ export type SignupInput = {
   /** Puede faltar en coexistencia; se resuelve con los números de la WABA. */
   phoneNumberId?: string | null
   coexistence?: boolean
+  metaUserId?: string | null
 }
 
 type PhoneNumberRow = { id: string; display_phone_number?: string; verified_name?: string }
@@ -111,6 +114,7 @@ export async function completeSignup(
     pin,
     registered,
     coexistence,
+    metaUserId: input.metaUserId ?? null,
   }
 }
 

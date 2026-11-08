@@ -8,7 +8,7 @@ Mientras falten estas variables, el panel muestra WhatsApp como "Muy pronto" y e
 
 1. En [developers.facebook.com](https://developers.facebook.com/apps) creá una app del tipo **Business**, asociada al Business Manager de la empresa (tiene que estar verificada).
 2. Agregá los productos **WhatsApp** y **Facebook Login for Business**.
-3. En **Configuración de la app → Básica**: dominio de la app, URL de política de privacidad y de términos, y en **Eliminación de datos** la URL de devolución de llamada `https://<dominio>/api/meta/data-deletion`.
+3. En **Configuración de la app → Básica**: dominio de la app, URL de política de privacidad y de términos, y en **Eliminación de datos** la URL de devolución de llamada `https://<dominio>/api/meta/data-deletion` (detalles en [META-APP-REVIEW.md](META-APP-REVIEW.md)).
 4. Anotá el **ID de la app** (`META_APP_ID`) y la **clave secreta** (`META_APP_SECRET`).
 
 ## 2. Alta embebida (Embedded Signup)

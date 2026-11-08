@@ -140,6 +140,12 @@ export const users = pgTable("users", {
   phoneE164: text("phone_e164"),
   /** Resend avisó un rebote o una queja: no se le mandan más correos de avisos. */
   emailBouncedAt: timestamp("email_bounced_at", { withTimezone: true }),
+  /**
+   * Hash scrypt de la contraseña ("scrypt$sal$hash"). Solo lo tienen las
+   * cuentas de prueba creadas por script (la de los revisores de Meta,
+   * scripts/seed-meta-reviewer.ts); el resto entra con Google o enlace mágico.
+   */
+  passwordHash: text("password_hash"),
   /** Negocio activo del selector; se usa también como "último negocio usado". */
   lastBusinessId: uuid("last_business_id").references((): AnyPgColumn => businesses.id, {
     onDelete: "set null",
@@ -566,6 +572,12 @@ export const whatsappAccounts = pgTable("whatsapp_accounts", {
   historySync: syncStatusEnum("history_sync"),
   /** Avance del historial que informa Meta (0 a 100). */
   historyProgress: integer("history_progress"),
+  /**
+   * Id de Facebook (con alcance de la app) de quien hizo el alta embebida.
+   * Con él se encuentra la conexión cuando Meta manda un pedido de
+   * eliminación de datos (signed_request con user_id).
+   */
+  metaUserId: text("meta_user_id"),
   ...timestamps,
 })
 
@@ -880,6 +892,29 @@ export const auditLogs = pgTable(
   (t) => [index().on(t.businessId, t.createdAt)],
 )
 
+// ---------------------------------------------------------------------------
+// Pedidos de eliminación de datos de Meta (plataforma, no de un negocio)
+// ---------------------------------------------------------------------------
+
+/**
+ * Cada pedido que manda Meta a /api/meta/data-deletion, con el código de
+ * confirmación que se muestra en /eliminacion-datos?code=… No tiene
+ * business_id: lo atiende la plataforma con forPlatform.
+ */
+export const dataDeletionRequests = pgTable("data_deletion_requests", {
+  id: id(),
+  /** Código de confirmación que devolvemos a Meta y se consulta en la página de estado. */
+  code: text("code").notNull().unique(),
+  /** user_id del signed_request (id de Facebook con alcance de la app). */
+  metaUserId: text("meta_user_id").notNull(),
+  /** received → completed. */
+  status: text("status").$type<"received" | "completed">().notNull().default("received"),
+  /** Qué se borró: conexiones de WhatsApp y conversaciones. */
+  result: jsonb("result").$type<{ whatsappAccounts: number; conversations: number }>(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  ...timestamps,
+})
+
 export type Role = (typeof roleEnum.enumValues)[number]
 export type Business = typeof businesses.$inferSelect
 export type Membership = typeof memberships.$inferSelect
@@ -905,3 +940,4 @@ export type WaitlistEntry = typeof waitlistEntries.$inferSelect
 export type BotFeedback = typeof botFeedback.$inferSelect
 export type CatalogSource = typeof catalogSources.$inferSelect
 export type CatalogItem = typeof catalogItems.$inferSelect
+export type DataDeletionRequest = typeof dataDeletionRequests.$inferSelect

@@ -12,6 +12,7 @@ import {
   templateDefinitions,
   type RemoteTemplate,
 } from "@/lib/integrations/whatsapp/templates"
+import { liveAccountInfo, type LiveAccountInfo } from "@/lib/integrations/whatsapp/account-info"
 import { syncWindowOpen } from "@/lib/whatsapp/coexistence"
 import { accountToken, graphOptions, isWhatsAppConfigured } from "@/lib/whatsapp/deps"
 
@@ -43,6 +44,78 @@ async function remoteTemplates(wabaId: string, token: string): Promise<RemoteTem
     console.warn("[whatsapp] no se pudieron leer las plantillas", error)
     return null
   }
+}
+
+async function readLiveInfo(account: schema.WhatsAppAccount): Promise<LiveAccountInfo | null> {
+  try {
+    return await liveAccountInfo(account.wabaId, account.phoneNumberId, graphOptions(accountToken(account)))
+  } catch (error) {
+    console.warn("[whatsapp] no se pudo leer el estado del número", error)
+    return null
+  }
+}
+
+const phoneStatusLabels: Record<string, string> = {
+  CONNECTED: "Conectado",
+  PENDING: "Pendiente",
+  DISCONNECTED: "Desconectado",
+  FLAGGED: "Marcado por Meta",
+  RESTRICTED: "Restringido",
+  BANNED: "Bloqueado",
+  RATE_LIMITED: "Con límite temporal",
+  MIGRATED: "Migrado",
+  UNVERIFIED: "Sin verificar",
+}
+
+const qualityLabels: Record<LiveAccountInfo["quality"], { label: string; variant: "default" | "secondary" | "destructive" }> = {
+  GREEN: { label: "Alta", variant: "default" },
+  YELLOW: { label: "Media", variant: "secondary" },
+  RED: { label: "Baja", variant: "destructive" },
+  UNKNOWN: { label: "Sin datos todavía", variant: "secondary" },
+}
+
+const nameStatusLabels: Record<string, string> = {
+  APPROVED: "Aprobado",
+  AVAILABLE_WITHOUT_REVIEW: "Aprobado",
+  PENDING_REVIEW: "En revisión",
+  DECLINED: "Rechazado",
+  EXPIRED: "Vencido",
+  NONE: "Sin revisar",
+}
+
+/** Lo que dice Meta ahora del número conectado (Graph API). */
+function LiveInfo({ info }: { info: LiveAccountInfo | null }) {
+  if (!info) {
+    return <p className="text-sm text-muted-foreground">No pudimos consultar el estado del número en Meta ahora.</p>
+  }
+  const quality = qualityLabels[info.quality]
+  const rows: { label: string; value: React.ReactNode }[] = [
+    { label: "Cuenta de WhatsApp Business", value: info.wabaName ?? "—" },
+    { label: "Número", value: <span className="font-mono">{info.displayPhone ?? "—"}</span> },
+    {
+      label: "Nombre visible",
+      value: (
+        <>
+          {info.verifiedName ?? "—"}
+          {info.nameStatus ? (
+            <span className="text-muted-foreground"> ({nameStatusLabels[info.nameStatus] ?? info.nameStatus})</span>
+          ) : null}
+        </>
+      ),
+    },
+    { label: "Estado en Meta", value: info.status ? (phoneStatusLabels[info.status] ?? info.status) : "—" },
+    { label: "Calidad", value: <Badge variant={quality.variant}>{quality.label}</Badge> },
+  ]
+  return (
+    <dl className="grid gap-1.5 text-sm">
+      {rows.map((row) => (
+        <div key={row.label} className="flex items-center justify-between gap-3">
+          <dt className="text-muted-foreground">{row.label}</dt>
+          <dd className="min-w-0 truncate text-right">{row.value}</dd>
+        </div>
+      ))}
+    </dl>
+  )
 }
 
 const syncLabels: Record<NonNullable<schema.WhatsAppAccount["historySync"]>, string> = {
@@ -126,7 +199,10 @@ export async function WhatsAppSection({ db }: { db: ScopedDb }) {
   }
 
   const active = account.status === "active"
-  const templates = active && configured ? await remoteTemplates(account.wabaId, accountToken(account)) : null
+  const [templates, live] =
+    active && configured
+      ? await Promise.all([remoteTemplates(account.wabaId, accountToken(account)), readLiveInfo(account)])
+      : [null, null]
   const byName = new Map(
     (templates ?? []).filter((t) => t.language === TEMPLATE_LANGUAGE).map((t) => [t.name, t.status]),
   )
@@ -154,6 +230,8 @@ export async function WhatsAppSection({ db }: { db: ScopedDb }) {
           Meta dejó de aceptar la conexión y el bot no puede responder. Volvé a conectar el número para seguir.
         </p>
       ) : null}
+
+      {active && configured ? <LiveInfo info={live} /> : null}
 
       {active && account.coexistence ? <AppSync account={account} /> : null}
 

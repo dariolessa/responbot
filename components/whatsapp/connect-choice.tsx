@@ -77,7 +77,7 @@ export function ConnectWhatsAppChoice(props: { appId: string; configId: string; 
         key={choice}
         {...props}
         coexistence={choice === "app"}
-        label={choice === "app" ? "Conectar mi número" : "Conectar número nuevo"}
+        label="Conectar WhatsApp"
       />
     </div>
   )

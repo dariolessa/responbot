@@ -5,7 +5,13 @@ import { LegalPage } from "@/components/marketing/legal-page"
 import { GRACE_DAYS, TRIAL_DAYS } from "@/lib/billing/plans"
 import { brand } from "@/lib/brand"
 
-export const metadata: Metadata = { title: "Términos y condiciones" }
+export const metadata: Metadata = {
+  title: "Términos y condiciones",
+  description: `Términos de uso de ${brand.name}, servicio de ${brand.legalName}.`,
+}
+
+// Texto estático: se genera en el servidor y no depende de JavaScript (lo lee el rastreador de Meta).
+export const dynamic = "force-static"
 
 /*
  * Términos del servicio (docs/SPEC.md, "Privacidad": publicados en la
@@ -13,14 +19,22 @@ export const metadata: Metadata = { title: "Términos y condiciones" }
  * comercial; describe cómo funciona hoy el producto.
  */
 export default function TerminosPage() {
-  const provider = brand.legalName ?? brand.name
+  const provider = brand.legalName
+  const mail = (
+    <a href={`mailto:${brand.contactEmail}`} className="underline underline-offset-4">
+      {brand.contactEmail}
+    </a>
+  )
   return (
-    <LegalPage title="Términos y condiciones" updated="27 de octubre de 2026">
+    <LegalPage title="Términos y condiciones" updated="8 de noviembre de 2026">
       <section>
         <p>
-          Estos términos regulan el uso de {brand.name}, un servicio de {provider} que ofrece a negocios un asistente
-          de WhatsApp y un panel con agenda. Al crear una cuenta aceptás estos términos en nombre de tu negocio.
+          Estos términos regulan el uso de {brand.name}, un servicio que presta {provider}, una sociedad de
+          responsabilidad limitada constituida en {brand.legalJurisdiction}, que usa {brand.name} como nombre
+          comercial (&quot;nosotros&quot;). {brand.name} ofrece a negocios un asistente de WhatsApp con inteligencia
+          artificial y un panel con agenda. Al crear una cuenta aceptás estos términos en nombre de tu negocio.
         </p>
+        <p>Contacto: {mail}.</p>
       </section>
       <section>
         <h2>1. El servicio</h2>
@@ -42,8 +56,10 @@ export default function TerminosPage() {
       <section>
         <h2>3. WhatsApp y Meta</h2>
         <p>
-          El número se conecta con la API oficial de WhatsApp de Meta. Al usarlo aceptás también las políticas de
-          WhatsApp Business y de comercio de Meta. Meta puede cobrarte directamente los mensajes con plantilla según su
+          El número se conecta con la API oficial de WhatsApp Business de Meta, mediante el registro integrado de Meta
+          (botón &quot;Conectar WhatsApp&quot;). Al conectarlo nos autorizás a administrar esa cuenta de WhatsApp
+          Business y a mandar y recibir mensajes en nombre de tu negocio, solo para prestarte el servicio. Al usarlo
+          aceptás también las políticas de WhatsApp Business y de comercio de Meta. Meta puede cobrarte directamente los mensajes con plantilla según su
           tabla de precios, y puede limitar o suspender números que no cumplan sus políticas. No mandes mensajes a
           personas que no te dieron su número para eso.
         </p>
@@ -82,7 +98,8 @@ export default function TerminosPage() {
         <h2>6. Datos</h2>
         <p>
           Los datos de tus clientes son tuyos: vos sos el responsable y nosotros los tratamos por tu cuenta, solo para
-          prestarte el servicio. Los detalles están en la{" "}
+          prestarte el servicio. Los detalles (incluidos los datos de Meta y WhatsApp que usamos y cómo pedir su
+          eliminación) están en la{" "}
           <Link href="/privacidad" className="underline underline-offset-4">
             política de privacidad
           </Link>
@@ -101,17 +118,8 @@ export default function TerminosPage() {
         <h2>8. Cambios y baja</h2>
         <p>
           Podemos actualizar estos términos; si el cambio es importante te avisamos por correo antes de que rija.
-          Podés dejar de usar el servicio cuando quieras.
-          {brand.contactEmail ? (
-            <>
-              {" "}
-              Por cualquier consulta escribinos a{" "}
-              <a href={`mailto:${brand.contactEmail}`} className="underline underline-offset-4">
-                {brand.contactEmail}
-              </a>
-              .
-            </>
-          ) : null}
+          Podés dejar de usar el servicio cuando quieras: desconectá WhatsApp en Configuración y pedinos la baja de la
+          cuenta. Por cualquier consulta escribinos a {mail}.
         </p>
       </section>
     </LegalPage>
